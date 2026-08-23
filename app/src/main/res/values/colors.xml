@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="canvas_background">#F5F5F7</color>
+    <color name="surface_card">#FFFFFF</color>
+    <color name="border_subtle">#E5E5EA</color>
+    <color name="text_primary">#1C1C1E</color>
+    <color name="text_secondary">#8E8E93</color>
+    <color name="accent_blue">#2F6BFF</color>
+    <color name="ink_black">#000000</color>
+    <color name="ink_blue">#2F6BFF</color>
+    <color name="ink_red">#E53935</color>
+    <color name="ink_green">#2E8B45</color>
+    <color name="ink_yellow">#F4C430</color>
+    <color name="ink_orange">#F57C00</color>
+    <color name="ink_pink">#EC407A</color>
+    <color name="ink_purple">#7E3FF2</color>
+</resources>

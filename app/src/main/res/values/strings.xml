@@ -1,0 +1,29 @@
+<resources>
+    <string name="app_name">Paper</string>
+    <string name="library_title">Paper</string>
+    <string name="documents_count">%1$d documentos</string>
+    <string name="open_documents">Importar PDF</string>
+    <string name="empty_library_title">No hay documentos todavía</string>
+    <string name="empty_library_subtitle">Importa tu primer PDF o libro para empezar a leer y hacer anotaciones sin distracciones.</string>
+    <string name="library_button">‹ Biblioteca</string>
+    <string name="full_page">Página completa</string>
+    <string name="fit_width">Ajustar ancho</string>
+    <string name="actual_size">100% Real</string>
+    <string name="continuous_scroll">Scroll continuo</string>
+    <string name="two_page">Doble página (Libro)</string>
+    <string name="markdown">Markdown</string>
+    <string name="ink">Trazos</string>
+    <string name="assistant">Asistente</string>
+    <string name="done">Listo</string>
+    <string name="page_indicator">%1$d / %2$d</string>
+    <string name="page_progress">Página %1$d de %2$d · %3$d%%</string>
+    <string name="page_number_label">Página</string>
+    <string name="go">Ir</string>
+    <string name="pen">Lápiz</string>
+    <string name="highlighter">Subrayador</string>
+    <string name="text_highlight">Marcador</string>
+    <string name="underline">Subrayar</string>
+    <string name="eraser">Borrador</string>
+    <string name="undo">Deshacer</string>
+    <string name="redo">Rehacer</string>
+</resources>
