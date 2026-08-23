@@ -84,32 +84,65 @@ fun InkToolbar(
         ) {
             Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 9.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    ToolChoice("Pluma", Icons.Rounded.Edit, state.activeInkTool == InkTool.PEN) {
+                    ToolChoice("Pluma", Icons.Rounded.Edit, state.activeInkTool == InkTool.PEN, state.isDarkMode) {
                         onAction(ReaderAction.SelectInkTool(InkTool.PEN))
                     }
-                    ToolChoice("Resaltar", Icons.Rounded.BorderColor, state.activeInkTool == InkTool.HIGHLIGHTER) {
+                    ToolChoice("Resaltar", Icons.Rounded.BorderColor, state.activeInkTool == InkTool.HIGHLIGHTER, state.isDarkMode) {
                         onAction(ReaderAction.SelectInkTool(InkTool.HIGHLIGHTER))
                     }
-                    ToolChoice("Borrar", Icons.Rounded.CleaningServices, state.activeInkTool == InkTool.ERASER) {
+                    ToolChoice("Borrar", Icons.Rounded.CleaningServices, state.activeInkTool == InkTool.ERASER, state.isDarkMode) {
                         onAction(ReaderAction.SelectInkTool(InkTool.ERASER))
                     }
-                    ToolChoice("Flecha", Icons.AutoMirrored.Rounded.ArrowForward, state.activeInkTool == InkTool.ARROW) {
+                    ToolChoice("Flecha", Icons.AutoMirrored.Rounded.ArrowForward, state.activeInkTool == InkTool.ARROW, state.isDarkMode) {
                         onAction(ReaderAction.SelectInkTool(InkTool.ARROW))
                     }
+                    Box {
+                        Surface(
+                            modifier = Modifier.clickable { moreOpen = true },
+                            color = if (moreOpen) AccentBlue.copy(alpha = .14f) else Color.Transparent,
+                            shape = RoundedCornerShape(12.dp),
+                            border = BorderStroke(1.dp, if (moreOpen) AccentBlue.copy(alpha = .6f) else Color.Transparent)
+                        ) {
+                            Row(modifier = Modifier.padding(horizontal = 9.dp, vertical = 7.dp), verticalAlignment = Alignment.CenterVertically) {
+                                Icon(Icons.Rounded.MoreHoriz, null, tint = if (state.isDarkMode) TextSecondaryDark else Color(0xFF65758B), modifier = Modifier.size(16.dp))
+                                Spacer(Modifier.width(4.dp))
+                                Text("Más", color = textPrimary, style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Medium))
+                            }
+                        }
+                        DropdownMenu(
+                            expanded = moreOpen,
+                            onDismissRequest = { moreOpen = false },
+                            modifier = Modifier.background(if (state.isDarkMode) Color(0xFF1E293B) else Color.White)
+                        ) {
+                            InkMenuItem("Mano", InkTool.HAND, state.isDarkMode, onAction) { moreOpen = false }
+                            InkMenuItem("Selección de texto", InkTool.SELECT_TEXT, state.isDarkMode, onAction) { moreOpen = false }
+                            InkMenuItem("Subrayar", InkTool.UNDERLINE, state.isDarkMode, onAction) { moreOpen = false }
+                            InkMenuItem("Rectángulo", InkTool.RECTANGLE, state.isDarkMode, onAction) { moreOpen = false }
+                            InkMenuItem("Lazo", InkTool.LASSO, state.isDarkMode, onAction) { moreOpen = false }
+                            InkMenuItem("Nota adhesiva", InkTool.STICKY_NOTE, state.isDarkMode, onAction) { moreOpen = false }
+                            InkMenuItem("Cuadro de texto", InkTool.TEXT_BOX, state.isDarkMode, onAction) { moreOpen = false }
+                            InkMenuItem("Firma", InkTool.SIGNATURE, state.isDarkMode, onAction) { moreOpen = false }
+                        }
+                    }
+
                     Spacer(Modifier.weight(1f))
-                    Text(
-                        text = state.activeInkTool.displayName,
-                        color = AccentBlue,
-                        style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold)
-                    )
+
                     IconButton(onClick = { onAction(ReaderAction.Undo) }, enabled = state.canUndo) {
-                        Icon(Icons.AutoMirrored.Rounded.Undo, "Deshacer", tint = textPrimary)
+                        Icon(Icons.AutoMirrored.Rounded.Undo, "Deshacer", tint = if (state.canUndo) textPrimary else textSecondary.copy(alpha = 0.4f))
                     }
                     IconButton(onClick = { onAction(ReaderAction.Redo) }, enabled = state.canRedo) {
-                        Icon(Icons.AutoMirrored.Rounded.Redo, "Rehacer", tint = textPrimary)
+                        Icon(Icons.AutoMirrored.Rounded.Redo, "Rehacer", tint = if (state.canRedo) textPrimary else textSecondary.copy(alpha = 0.4f))
                     }
-                    IconButton(onClick = { onAction(ReaderAction.ExitInkMode) }) {
-                        Icon(Icons.Rounded.Check, "Terminar anotación", tint = AccentBlue)
+                    Surface(
+                        modifier = Modifier.clickable { onAction(ReaderAction.ExitInkMode) },
+                        color = AccentBlue,
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Row(modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Rounded.Check, null, tint = Color.White, modifier = Modifier.size(16.dp))
+                            Spacer(Modifier.width(4.dp))
+                            Text("Listo", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                        }
                     }
                 }
 
@@ -130,37 +163,22 @@ fun InkToolbar(
                         }
                     }
 
-                    Spacer(Modifier.width(14.dp))
+                    Spacer(Modifier.width(16.dp))
                     Text("Trazo", style = MaterialTheme.typography.labelSmall.copy(color = textSecondary, fontWeight = FontWeight.Bold))
-                    Spacer(Modifier.width(6.dp))
+                    Spacer(Modifier.width(8.dp))
                     listOf(2f to "Fino", 4f to "Medio", 7f to "Grueso").forEach { (width, label) ->
                         val isSelected = kotlin.math.abs(state.selectedStrokeWidth - width) < 0.6f
                         Surface(
-                            modifier = Modifier.padding(end = 5.dp).clickable { onAction(ReaderAction.SetStrokeWidth(width)) },
+                            modifier = Modifier.padding(end = 6.dp).clickable { onAction(ReaderAction.SetStrokeWidth(width)) },
                             shape = RoundedCornerShape(10.dp),
                             color = if (isSelected) AccentBlue.copy(alpha = .14f) else Color.Transparent,
-                            border = BorderStroke(1.dp, if (isSelected) AccentBlue.copy(alpha = .65f) else textSecondary.copy(alpha = .2f))
+                            border = BorderStroke(1.dp, if (isSelected) AccentBlue.copy(alpha = .65f) else textSecondary.copy(alpha = .25f))
                         ) {
-                            Row(modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Row(modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp), verticalAlignment = Alignment.CenterVertically) {
                                 Box(Modifier.size(if (width < 3f) 4.dp else if (width < 5f) 7.dp else 10.dp).background(selectedColor, CircleShape))
-                                Spacer(Modifier.width(4.dp))
-                                Text(label, fontSize = 11.sp, color = textPrimary)
+                                Spacer(Modifier.width(5.dp))
+                                Text(label, fontSize = 12.sp, color = textPrimary, fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal)
                             }
-                        }
-                    }
-
-                    Spacer(Modifier.weight(1f))
-                    Box {
-                        IconButton(onClick = { moreOpen = true }) { Icon(Icons.Rounded.MoreHoriz, "Más herramientas", tint = textPrimary) }
-                        DropdownMenu(expanded = moreOpen, onDismissRequest = { moreOpen = false }) {
-                            InkMenuItem("Mano", InkTool.HAND, onAction) { moreOpen = false }
-                            InkMenuItem("Selección de texto", InkTool.SELECT_TEXT, onAction) { moreOpen = false }
-                            InkMenuItem("Subrayar", InkTool.UNDERLINE, onAction) { moreOpen = false }
-                            InkMenuItem("Rectángulo", InkTool.RECTANGLE, onAction) { moreOpen = false }
-                            InkMenuItem("Lazo", InkTool.LASSO, onAction) { moreOpen = false }
-                            InkMenuItem("Nota adhesiva", InkTool.STICKY_NOTE, onAction) { moreOpen = false }
-                            InkMenuItem("Cuadro de texto", InkTool.TEXT_BOX, onAction) { moreOpen = false }
-                            InkMenuItem("Firma", InkTool.SIGNATURE, onAction) { moreOpen = false }
                         }
                     }
                 }
@@ -170,7 +188,9 @@ fun InkToolbar(
 }
 
 @Composable
-private fun ToolChoice(label: String, icon: ImageVector, selected: Boolean, onClick: () -> Unit) {
+private fun ToolChoice(label: String, icon: ImageVector, selected: Boolean, isDarkMode: Boolean, onClick: () -> Unit) {
+    val textPrimary = if (isDarkMode) TextPrimaryDark else TextPrimary
+    val textSecondary = if (isDarkMode) TextSecondaryDark else TextSecondary
     Surface(
         modifier = Modifier.padding(end = 6.dp).clickable(onClick = onClick),
         color = if (selected) AccentBlue.copy(alpha = .14f) else Color.Transparent,
@@ -178,17 +198,17 @@ private fun ToolChoice(label: String, icon: ImageVector, selected: Boolean, onCl
         border = BorderStroke(1.dp, if (selected) AccentBlue.copy(alpha = .6f) else Color.Transparent)
     ) {
         Row(modifier = Modifier.padding(horizontal = 9.dp, vertical = 7.dp), verticalAlignment = Alignment.CenterVertically) {
-            Icon(icon, null, tint = if (selected) AccentBlue else Color(0xFF65758B), modifier = Modifier.size(16.dp))
+            Icon(icon, null, tint = if (selected) AccentBlue else textSecondary, modifier = Modifier.size(16.dp))
             Spacer(Modifier.width(5.dp))
-            Text(label, style = MaterialTheme.typography.labelMedium.copy(fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium))
+            Text(label, color = if (selected) AccentBlue else textPrimary, style = MaterialTheme.typography.labelMedium.copy(fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium))
         }
     }
 }
 
 @Composable
-private fun InkMenuItem(label: String, tool: InkTool, onAction: (ReaderAction) -> Unit, close: () -> Unit) {
+private fun InkMenuItem(label: String, tool: InkTool, isDarkMode: Boolean, onAction: (ReaderAction) -> Unit, close: () -> Unit) {
     DropdownMenuItem(
-        text = { Text(label) },
+        text = { Text(label, color = if (isDarkMode) TextPrimaryDark else TextPrimary) },
         onClick = { close(); onAction(ReaderAction.SelectInkTool(tool)) }
     )
 }

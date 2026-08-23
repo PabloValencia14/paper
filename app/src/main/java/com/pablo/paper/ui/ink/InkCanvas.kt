@@ -112,6 +112,11 @@ fun InkCanvas(
                 val isTextBoxGesture = currentActiveTool == InkTool.TEXT_BOX
                 val isStampGesture = currentActiveTool == InkTool.STAMP
                 
+                // In continuous scroll mode, finger touches belong entirely to LazyColumn scrolling
+                if (isContinuousScroll && !hasStylus && !isSelectionGesture && !isStickyNoteGesture && !isTextBoxGesture && !isStampGesture) {
+                    return@awaitEachGesture
+                }
+                
                 // ONLY optical stylus can draw when not in Hand tool.
                 // Fingers (PointerType.Touch) always navigate/pan/zoom and never paint.
                 val isDrawingTouch = !isHandTool && (hasStylus || isSelectionGesture || isStickyNoteGesture || isTextBoxGesture || isStampGesture)
@@ -753,33 +758,33 @@ fun InkCanvas(
                             val native = canvas.nativeCanvas
 
                             if (text.isNotBlank()) {
-                                // Draw Liquid Glass Sticky Note Card with Content Preview
+                                // Draw High-Contrast Sticky Note Card with Content Preview
                                 val textPaint = android.graphics.Paint().apply {
-                                    color = 0xFF2B2118.toInt()
-                                    textSize = (13f * scaleFactor).coerceIn(11f, 24f)
-                                    typeface = android.graphics.Typeface.SANS_SERIF
+                                    color = 0xFF1E293B.toInt() // Dark slate for sharp readable contrast
+                                    textSize = (13.5f * scaleFactor).coerceIn(12f, 32f)
+                                    typeface = android.graphics.Typeface.create(android.graphics.Typeface.SANS_SERIF, android.graphics.Typeface.NORMAL)
                                     isAntiAlias = true
                                 }
                                 val headerPaint = android.graphics.Paint().apply {
                                     color = 0xFFB45309.toInt() // Amber 700
-                                    textSize = (11f * scaleFactor).coerceIn(9.5f, 20f)
-                                    typeface = android.graphics.Typeface.DEFAULT_BOLD
+                                    textSize = (11f * scaleFactor).coerceIn(10f, 24f)
+                                    typeface = android.graphics.Typeface.create(android.graphics.Typeface.DEFAULT, android.graphics.Typeface.BOLD)
                                     isAntiAlias = true
                                 }
                                 val cardBgPaint = android.graphics.Paint().apply {
-                                    color = android.graphics.Color.argb(242, 255, 248, 220) // Amber frosted glass
+                                    color = android.graphics.Color.argb(252, 254, 243, 199) // Solid Warm Amber Note
                                     style = android.graphics.Paint.Style.FILL
                                     isAntiAlias = true
                                 }
                                 val cardBorderPaint = android.graphics.Paint().apply {
-                                    color = android.graphics.Color.argb(180, 245, 158, 11) // Amber border
+                                    color = android.graphics.Color.argb(220, 245, 158, 11) // Amber border
                                     this.strokeWidth = 1.5f * scaleFactor
                                     style = android.graphics.Paint.Style.STROKE
                                     isAntiAlias = true
                                 }
 
                                 // Break text into wrapped lines
-                                val maxCardWidth = 220f * scaleFactor
+                                val maxCardWidth = 240f * scaleFactor
                                 val words = text.split(" ")
                                 val lines = mutableListOf<String>()
                                 var currentLine = StringBuilder()
@@ -801,7 +806,7 @@ fun InkCanvas(
                                     val w = textPaint.measureText(l)
                                     if (w > measuredMaxW) measuredMaxW = w
                                 }
-                                val cardWidth = (measuredMaxW + 28f * scaleFactor).coerceAtLeast(100f * scaleFactor)
+                                val cardWidth = (measuredMaxW + 28f * scaleFactor).coerceIn(80f * scaleFactor, maxCardWidth)
                                 val lineHeight = textPaint.fontSpacing
                                 val headerHeight = 22f * scaleFactor
                                 val cardHeight = headerHeight + (lineHeight * displayLines.size) + 12f * scaleFactor
@@ -815,7 +820,7 @@ fun InkCanvas(
 
                                 // Soft ambient shadow
                                 val shadowPaint = android.graphics.Paint().apply {
-                                    color = android.graphics.Color.argb(45, 0, 0, 0)
+                                    color = android.graphics.Color.argb(60, 0, 0, 0)
                                     style = android.graphics.Paint.Style.FILL
                                     isAntiAlias = true
                                 }
@@ -827,25 +832,13 @@ fun InkCanvas(
                                 )
                                 native.drawRoundRect(shadowRect, 10f * scaleFactor, 10f * scaleFactor, shadowPaint)
 
-                                // Liquid glass card body
+                                // Solid note card body
                                 native.drawRoundRect(cardRect, 10f * scaleFactor, 10f * scaleFactor, cardBgPaint)
-
-                                // Water / Glass gloss reflection arc on top half
-                                val glossPaint = android.graphics.Paint().apply {
-                                    shader = android.graphics.LinearGradient(
-                                        0f, cardRect.top, 0f, cardRect.top + (cardHeight * 0.5f),
-                                        android.graphics.Color.argb(90, 255, 255, 255),
-                                        android.graphics.Color.TRANSPARENT,
-                                        android.graphics.Shader.TileMode.CLAMP
-                                    )
-                                    style = android.graphics.Paint.Style.FILL
-                                }
-                                native.drawRoundRect(cardRect, 10f * scaleFactor, 10f * scaleFactor, glossPaint)
                                 native.drawRoundRect(cardRect, 10f * scaleFactor, 10f * scaleFactor, cardBorderPaint)
 
                                 // Header Pin Icon & Label
                                 val pinPaint = android.graphics.Paint().apply {
-                                    color = 0xFFF59E0B.toInt()
+                                    color = 0xFFD97706.toInt()
                                     style = android.graphics.Paint.Style.FILL
                                     isAntiAlias = true
                                 }
@@ -866,7 +859,7 @@ fun InkCanvas(
                                     center.x + noteSize / 2f, center.y + noteSize / 2f
                                 )
                                 val bgPaint = android.graphics.Paint().apply {
-                                    color = android.graphics.Color.argb(240, 255, 213, 79)
+                                    color = android.graphics.Color.argb(250, 255, 213, 79)
                                     style = android.graphics.Paint.Style.FILL
                                     isAntiAlias = true
                                 }
@@ -876,7 +869,7 @@ fun InkCanvas(
                                     style = android.graphics.Paint.Style.STROKE
                                     isAntiAlias = true
                                 }
-                                native.drawRoundRect(rect, 6f * scaleFactor, 6f * scaleFactor, bgPaint)
+                                 native.drawRoundRect(rect, 6f * scaleFactor, 6f * scaleFactor, bgPaint)
                                 native.drawRoundRect(rect, 6f * scaleFactor, 6f * scaleFactor, borderPaint)
                             }
                         }

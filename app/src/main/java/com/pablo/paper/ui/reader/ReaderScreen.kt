@@ -281,12 +281,15 @@ fun ReaderScreen(
                     }
                 }
 
-                // Layer: Floating Page Status Badge (Top Right in Reading mode)
+                // Layer: Floating Page Status Badge (Shown in Immersive/Collapsed mode)
                 AnimatedVisibility(
-                    visible = !state.isToolbarCollapsed && state.mode == ReaderMode.READING && !state.isSearchVisible,
+                    visible = state.isToolbarCollapsed && state.mode == ReaderMode.READING && !state.isSearchVisible,
                     enter = fadeIn(),
                     exit = fadeOut(),
-                    modifier = Modifier.align(Alignment.TopEnd)
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .statusBarsPadding()
+                        .padding(top = 12.dp, end = 16.dp)
                 ) {
                     PageStatusBadge(
                         currentPage = state.currentPage,
@@ -320,17 +323,10 @@ fun ReaderScreen(
                             .align(Alignment.TopCenter)
                             .zIndex(10f)
                     ) {
-                        if (state.mode == ReaderMode.INK) {
-                            InkToolbar(
-                                state = state,
-                                onAction = { viewModel.onAction(it) }
-                            )
-                        } else {
-                            ReaderToolbar(
-                                state = state,
-                                onAction = { viewModel.onAction(it) }
-                            )
-                        }
+                        ReaderToolbar(
+                            state = state,
+                            onAction = { viewModel.onAction(it) }
+                        )
                     }
                 }
 
