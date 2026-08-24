@@ -363,7 +363,17 @@ private fun SpreadPageCard(
             onOpenTextBox = { onAction(ReaderAction.OpenTextBoxDialog(it)) },
             onNewTextBox = { onAction(ReaderAction.OpenTextBoxDialog(null, it)) },
             onOpenStamp = { onAction(ReaderAction.OpenStampDialog(it)) },
-            onMoveAnnotation = { id, point -> onAction(ReaderAction.MoveAnnotation(id, point)) },
+            onMoveAnnotation = { id, point ->
+                pageAnnotations = pageAnnotations.map {
+                    if (it.id == id) {
+                        it.copy(
+                            stroke = it.stroke?.copy(points = listOf(point)),
+                            updatedAt = System.currentTimeMillis()
+                        )
+                    } else it
+                }
+                onAction(ReaderAction.MoveAnnotation(id, point, pageIndex))
+            },
             onPerformUndo = { onAction(ReaderAction.Undo) },
             onPerformRedo = { onAction(ReaderAction.Redo) },
             onCycleColor = {

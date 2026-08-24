@@ -51,56 +51,31 @@ import com.pablo.paper.ui.theme.TextSecondary
 import com.pablo.paper.ui.theme.TextSecondaryDark
 
 /**
- * High-end Liquid Glass surface with:
- * 1. Translucent frosted glass tint
- * 2. Water / crystal specular reflection sheen on the upper half
- * 3. Prismatic specular dual-edge border
- * 4. Ambient depth shadow
+ * Clean, modern elevated surface for toolbars, dialogs and floating panels.
  */
 @Composable
 fun LiquidGlassSurface(
     modifier: Modifier = Modifier,
     shape: Shape = RoundedCornerShape(20.dp),
     isDarkMode: Boolean = false,
-    elevation: Dp = 8.dp,
+    elevation: Dp = 6.dp,
     borderAlpha: Float = 1.0f,
     onClick: (() -> Unit)? = null,
     content: @Composable BoxScope.() -> Unit
 ) {
-    // Glass base tints (crystal frosted translucent)
-    val baseGlassColor = if (isDarkMode) {
-        Color(0xEA141824) // Deep obsidian crystal glass
+    val baseSurfaceColor = if (isDarkMode) {
+        Color(0xFF1B2232)
     } else {
-        Color(0xF0FFFFFF) // Frosted ice white glass
+        Color(0xFFFFFFFF)
     }
 
-    // Specular border gradient (bright reflection at top-left to subtle shadow at bottom-right)
-    val specularBorderBrush = if (isDarkMode) {
-        Brush.linearGradient(
-            colors = listOf(
-                Color.White.copy(alpha = 0.55f * borderAlpha),
-                Color(0x403B82F6),
-                Color(0x10FFFFFF),
-                Color(0x40000000)
-            ),
-            start = Offset(0f, 0f),
-            end = Offset(Float.POSITIVE_INFINITY, Float.POSITIVE_INFINITY)
-        )
-    } else {
-        Brush.linearGradient(
-            colors = listOf(
-                Color.White.copy(alpha = 0.95f * borderAlpha),
-                Color.White.copy(alpha = 0.45f * borderAlpha),
-                Color(0x203B82F6),
-                Color(0x25000000)
-            ),
-            start = Offset(0f, 0f),
-            end = Offset(Float.POSITIVE_INFINITY, Float.POSITIVE_INFINITY)
-        )
-    }
+    val borderStroke = BorderStroke(
+        1.dp,
+        if (isDarkMode) Color(0x28FFFFFF) else Color(0x18000000)
+    )
 
-    val shadowSpotColor = if (isDarkMode) Color.Black.copy(alpha = 0.7f) else Color(0x30000000)
-    val shadowAmbientColor = if (isDarkMode) Color(0x352563EB) else Color(0x15000000)
+    val shadowSpotColor = if (isDarkMode) Color.Black.copy(alpha = 0.5f) else Color(0x18000000)
+    val shadowAmbientColor = if (isDarkMode) Color.Black.copy(alpha = 0.3f) else Color(0x0C000000)
 
     val clickableModifier = if (onClick != null) {
         Modifier.clickable(
@@ -121,46 +96,9 @@ fun LiquidGlassSurface(
                 ambientColor = shadowAmbientColor
             )
             .clip(shape)
-            .background(baseGlassColor)
-            // Liquid water & glass specular reflection layer
-            .drawWithContent {
-                drawContent()
-                val w = size.width
-                val h = size.height
-
-                // Top glossy reflection gradient (simulating curved glass surface / water drop refraction)
-                val glossBrush = Brush.verticalGradient(
-                    colors = listOf(
-                        if (isDarkMode) Color.White.copy(alpha = 0.18f) else Color.White.copy(alpha = 0.45f),
-                        if (isDarkMode) Color.White.copy(alpha = 0.04f) else Color.White.copy(alpha = 0.09f),
-                        Color.Transparent
-                    ),
-                    startY = 0f,
-                    endY = h * 0.52f
-                )
-
-                drawRect(
-                    brush = glossBrush,
-                    size = Size(w, h * 0.52f)
-                )
-
-                // Subtle bottom inner refraction glow
-                val bottomGlowBrush = Brush.verticalGradient(
-                    colors = listOf(
-                        Color.Transparent,
-                        if (isDarkMode) Color(0x183B82F6) else Color.White.copy(alpha = 0.25f)
-                    ),
-                    startY = h * 0.75f,
-                    endY = h
-                )
-                drawRect(
-                    brush = bottomGlowBrush,
-                    topLeft = Offset(0f, h * 0.75f),
-                    size = Size(w, h * 0.25f)
-                )
-            }
+            .background(baseSurfaceColor)
             .border(
-                border = BorderStroke(1.dp, specularBorderBrush),
+                border = borderStroke,
                 shape = shape
             )
             .then(clickableModifier)
@@ -177,7 +115,7 @@ fun LiquidGlassPanel(
     modifier: Modifier = Modifier,
     shape: Shape = RoundedCornerShape(24.dp),
     isDarkMode: Boolean = false,
-    elevation: Dp = 16.dp,
+    elevation: Dp = 12.dp,
     content: @Composable BoxScope.() -> Unit
 ) {
     LiquidGlassSurface(
@@ -190,7 +128,7 @@ fun LiquidGlassPanel(
 }
 
 /**
- * Liquid Glass Dialog / Modal container wrapping BasicAlertDialog with full Liquid Glass styling.
+ * Liquid Glass Dialog / Modal container wrapping BasicAlertDialog with full clean styling.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -211,14 +149,14 @@ fun LiquidGlassDialog(
         LiquidGlassSurface(
             shape = shape,
             isDarkMode = isDarkMode,
-            elevation = 24.dp,
+            elevation = 16.dp,
             content = content
         )
     }
 }
 
 /**
- * Liquid Glass Button styled like an Aqua crystal / water capsule.
+ * Clean modern button.
  */
 @Composable
 fun LiquidGlassButton(
@@ -226,56 +164,37 @@ fun LiquidGlassButton(
     modifier: Modifier = Modifier,
     isSelected: Boolean = false,
     isDarkMode: Boolean = false,
-    shape: Shape = RoundedCornerShape(14.dp),
+    shape: Shape = RoundedCornerShape(12.dp),
     accentColor: Color = AccentBlue,
-    contentPadding: androidx.compose.foundation.layout.PaddingValues = androidx.compose.foundation.layout.PaddingValues(horizontal = 14.dp, vertical = 8.dp),
+    contentPadding: androidx.compose.foundation.layout.PaddingValues = androidx.compose.foundation.layout.PaddingValues(horizontal = 10.dp, vertical = 6.dp),
     content: @Composable RowScope.() -> Unit
 ) {
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
 
     val surfaceColor = when {
-        isSelected -> if (isDarkMode) accentColor.copy(alpha = 0.32f) else accentColor.copy(alpha = 0.18f)
-        isPressed -> if (isDarkMode) Color(0x40FFFFFF) else Color(0x30FFFFFF)
-        isDarkMode -> Color(0x30FFFFFF)
-        else -> Color(0x50FFFFFF)
+        isSelected -> if (isDarkMode) accentColor.copy(alpha = 0.28f) else accentColor.copy(alpha = 0.14f)
+        isPressed -> if (isDarkMode) Color(0x22FFFFFF) else Color(0x10000000)
+        isDarkMode -> Color(0x12FFFFFF)
+        else -> Color(0x06000000)
     }
 
-    val borderBrush = when {
-        isSelected -> Brush.linearGradient(
-            listOf(accentColor.copy(alpha = 0.9f), accentColor.copy(alpha = 0.4f))
-        )
-        isDarkMode -> Brush.linearGradient(
-            listOf(Color.White.copy(alpha = 0.45f), Color.White.copy(alpha = 0.10f))
-        )
-        else -> Brush.linearGradient(
-            listOf(Color.White.copy(alpha = 0.85f), Color(0x20000000))
-        )
+    val borderStroke = when {
+        isSelected -> BorderStroke(1.dp, accentColor)
+        isDarkMode -> BorderStroke(1.dp, Color(0x1EFFFFFF))
+        else -> BorderStroke(1.dp, Color(0x12000000))
     }
 
     Box(
         modifier = modifier
             .shadow(
-                elevation = if (isSelected) 6.dp else if (isPressed) 2.dp else 4.dp,
+                elevation = if (isSelected) 3.dp else if (isPressed) 1.dp else 1.dp,
                 shape = shape,
-                spotColor = if (isSelected) accentColor.copy(alpha = 0.4f) else Color(0x20000000)
+                spotColor = if (isSelected) accentColor.copy(alpha = 0.3f) else Color(0x10000000)
             )
             .clip(shape)
             .background(surfaceColor)
-            // Liquid water glossy lens reflection
-            .drawWithContent {
-                drawContent()
-                val glossBrush = Brush.verticalGradient(
-                    colors = listOf(
-                        if (isDarkMode) Color.White.copy(alpha = 0.22f) else Color.White.copy(alpha = 0.50f),
-                        Color.Transparent
-                    ),
-                    startY = 0f,
-                    endY = size.height * 0.5f
-                )
-                drawRect(brush = glossBrush, size = Size(size.width, size.height * 0.5f))
-            }
-            .border(BorderStroke(1.dp, borderBrush), shape)
+            .border(borderStroke, shape)
             .clickable(
                 interactionSource = interactionSource,
                 indication = rememberRipple(color = accentColor),
@@ -294,7 +213,7 @@ fun LiquidGlassButton(
 }
 
 /**
- * Liquid Glass Icon Button (for toolbars and action docks).
+ * Clean modern Icon Button (for toolbars and action docks).
  */
 @Composable
 fun LiquidGlassIconButton(
@@ -306,9 +225,9 @@ fun LiquidGlassIconButton(
     enabled: Boolean = true,
     isDarkMode: Boolean = false,
     accentColor: Color = AccentBlue,
-    size: Dp = 38.dp,
+    size: Dp = 34.dp,
     iconSize: Dp = 18.dp,
-    shape: Shape = RoundedCornerShape(12.dp)
+    shape: Shape = RoundedCornerShape(10.dp)
 ) {
     val textPrimary = if (isDarkMode) TextPrimaryDark else TextPrimary
     val textSec = if (isDarkMode) TextSecondaryDark else TextSecondary
@@ -321,7 +240,7 @@ fun LiquidGlassIconButton(
 
     val buttonBg = when {
         !enabled -> Color.Transparent
-        isSelected -> if (isDarkMode) accentColor.copy(alpha = 0.40f) else accentColor.copy(alpha = 0.18f)
+        isSelected -> if (isDarkMode) accentColor.copy(alpha = 0.28f) else accentColor.copy(alpha = 0.14f)
         else -> Color.Transparent
     }
 
@@ -336,21 +255,6 @@ fun LiquidGlassIconButton(
             .size(size)
             .clip(shape)
             .then(if (isSelected) Modifier.background(buttonBg) else Modifier)
-            .then(
-                if (isSelected) {
-                    Modifier.drawWithContent {
-                        drawContent()
-                        val w = this.size.width
-                        val h = this.size.height
-                        val gloss = Brush.verticalGradient(
-                            listOf(Color.White.copy(alpha = 0.3f), Color.Transparent),
-                            0f,
-                            h * 0.5f
-                        )
-                        drawRect(gloss, size = Size(w, h * 0.5f))
-                    }
-                } else Modifier
-            )
             .then(if (borderStroke != null) Modifier.border(borderStroke, shape) else Modifier)
             .clickable(
                 enabled = enabled,

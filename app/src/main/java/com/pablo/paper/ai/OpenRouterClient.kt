@@ -17,7 +17,7 @@ class OpenRouterClient(
     private val gson: Gson = Gson()
 ) {
     suspend fun fetchDynamicModels(
-        provider: AiProvider,
+        provider: AiProvider = AiProvider.OPENROUTER,
         apiKey: String = ""
     ): List<AiModelInfo> = withContext(Dispatchers.IO) {
         var connection: HttpURLConnection? = null
@@ -47,7 +47,7 @@ class OpenRouterClient(
                             val obj = element.asJsonObject
                             val id = obj.get("id")?.asString ?: continue
                             val name = obj.get("name")?.asString ?: id
-                            val desc = obj.get("description")?.asString ?: "Disponible en el servidor proxy"
+                            val desc = obj.get("description")?.asString ?: "Modelo disponible en OpenRouter"
                             list.add(AiModelInfo(id = id, name = name, provider = provider.shortName, description = desc))
                         }
                     }
@@ -55,7 +55,7 @@ class OpenRouterClient(
                 }
             }
         } catch (e: Exception) {
-            // Silently fallback
+            // Fallback
         } finally {
             connection?.disconnect()
         }
@@ -67,15 +67,15 @@ class OpenRouterClient(
         modelId: String,
         messages: List<AssistantMessage>,
         systemPrompt: String? = null,
-        provider: AiProvider = AiProvider.GOOGLE_GEMINI
+        provider: AiProvider = AiProvider.OPENROUTER
     ): Result<String> = withContext(Dispatchers.IO) {
         var connection: HttpURLConnection? = null
         try {
             val url = URL(provider.endpointUrl)
             connection = url.openConnection() as HttpURLConnection
             connection.requestMethod = "POST"
-            connection.connectTimeout = 25000
-            connection.readTimeout = 60000
+            connection.connectTimeout = 30000
+            connection.readTimeout = 120000
             connection.doInput = true
             connection.doOutput = true
 
@@ -89,17 +89,13 @@ class OpenRouterClient(
             connection.setRequestProperty("Content-Type", "application/json; charset=UTF-8")
 
             // Auto-resolve model
-            val resolvedModel = if (modelId.equals("auto", ignoreCase = true) || modelId.isBlank()) {
-                if (provider == AiProvider.HOMELAB_TAILSCALE) {
-                    "claude-3-7-sonnet"
-                } else {
-                    provider.defaultModel
-                }
+            val resolvedModel = if (modelId.isBlank() || modelId.equals("auto", ignoreCase = true)) {
+                provider.defaultModel
             } else {
                 modelId
             }
 
-            // Build JSON payload
+            // Build JSON payload (OpenAI Chat Completions format supported by OpenRouter)
             val root = JsonObject()
             root.addProperty("model", resolvedModel)
 
@@ -113,13 +109,12 @@ class OpenRouterClient(
 
             for (msg in messages) {
                 val msgObj = JsonObject()
-                msgObj.addProperty(
-                    "role", when (msg.role) {
-                        MessageRole.USER -> "user"
-                        MessageRole.ASSISTANT -> "assistant"
-                        MessageRole.SYSTEM -> "system"
-                    }
-                )
+                val roleStr = when (msg.role) {
+                    MessageRole.USER -> "user"
+                    MessageRole.ASSISTANT -> "assistant"
+                    MessageRole.SYSTEM -> "user"
+                }
+                msgObj.addProperty("role", roleStr)
                 msgObj.addProperty("content", msg.content)
                 messagesArray.add(msgObj)
             }
@@ -143,23 +138,102 @@ class OpenRouterClient(
 
             if (responseCode in 200..299) {
                 val jsonResponse = gson.fromJson(responseText, JsonObject::class.java)
+
+                // OpenAI / OpenRouter response format (choices array)
                 val choices = jsonResponse.getAsJsonArray("choices")
                 if (choices != null && choices.size() > 0) {
                     val choice = choices.get(0).asJsonObject
                     val message = choice.getAsJsonObject("message")
-                    val content = message?.get("content")?.asString ?: ""
-                    Result.success(content)
-                } else {
-                    Result.failure(Exception("Respuesta vacía del proveedor (${provider.shortName})"))
+
+                    var contentText = ""
+                    var reasoningText = ""
+
+                    // 1. Extract content safely without throwing on JsonNull or JsonArray
+                    val contentElem = message?.get("content")
+                    if (contentElem != null && !contentElem.isJsonNull) {
+                        if (contentElem.isJsonPrimitive) {
+                            contentText = contentElem.asString.trim()
+                        } else if (contentElem.isJsonArray) {
+                            val sb = StringBuilder()
+                            for (elem in contentElem.asJsonArray) {
+                                if (elem.isJsonObject) {
+                                    val txt = elem.asJsonObject.get("text")?.asString
+                                    if (txt != null) sb.append(txt)
+                                } else if (elem.isJsonPrimitive) {
+                                    sb.append(elem.asString)
+                                }
+                            }
+                            contentText = sb.toString().trim()
+                        }
+                    }
+
+                    // 2. Extract reasoning / thinking tokens (crucial for stealth/ox-alpha and reasoning models)
+                    val reasoningElem = message?.get("reasoning")
+                        ?: message?.get("reasoning_content")
+                        ?: message?.get("thought")
+                        ?: choice.get("reasoning")
+                    if (reasoningElem != null && !reasoningElem.isJsonNull && reasoningElem.isJsonPrimitive) {
+                        reasoningText = reasoningElem.asString.trim()
+                    }
+
+                    // 3. Fallback to choice.text (legacy completions)
+                    if (contentText.isBlank() && reasoningText.isBlank()) {
+                        val textElem = choice.get("text")
+                        if (textElem != null && !textElem.isJsonNull && textElem.isJsonPrimitive) {
+                            contentText = textElem.asString.trim()
+                        }
+                    }
+
+                    // 4. Combine or select the best response
+                    val finalOutput = when {
+                        contentText.isNotBlank() && reasoningText.isNotBlank() -> {
+                            if (contentText.length < 50 && reasoningText.length > 100) {
+                                "$reasoningText\n\n$contentText"
+                            } else {
+                                contentText
+                            }
+                        }
+                        contentText.isNotBlank() -> contentText
+                        reasoningText.isNotBlank() -> reasoningText
+                        else -> ""
+                    }
+
+                    if (finalOutput.isNotBlank()) {
+                        return@withContext Result.success(finalOutput)
+                    }
                 }
+
+                // Anthropic fallback if any
+                val contentArray = jsonResponse.getAsJsonArray("content")
+                if (contentArray != null && contentArray.size() > 0) {
+                    val textBuilder = StringBuilder()
+                    for (elem in contentArray) {
+                        if (elem.isJsonObject) {
+                            val text = elem.asJsonObject.get("text")?.asString
+                            if (text != null) textBuilder.append(text)
+                        }
+                    }
+                    val result = textBuilder.toString().trim()
+                    if (result.isNotEmpty()) return@withContext Result.success(result)
+                }
+
+                Result.failure(Exception("Respuesta vacía de OpenRouter"))
             } else {
                 val errorMsg = try {
                     val jsonResponse = gson.fromJson(responseText, JsonObject::class.java)
-                    jsonResponse.getAsJsonObject("error")?.get("message")?.asString ?: responseText
+                    val errObj = jsonResponse.getAsJsonObject("error")
+                    errObj?.get("message")?.asString 
+                        ?: jsonResponse.get("detail")?.asString
+                        ?: responseText
                 } catch (e: Exception) {
                     responseText
                 }
-                Result.failure(Exception("Error en ${provider.shortName} ($responseCode): $errorMsg"))
+                val finalMessage = if (responseCode == 401) {
+                    "Error 401: Clave API de OpenRouter no válida o no configurada. Pulsa el icono de la llave (🔑) para introducir tu clave de openrouter.ai/keys."
+                } else {
+                    "Error en OpenRouter ($responseCode): $errorMsg"
+                }
+                Result.failure(Exception(finalMessage))
             }
         } catch (e: Exception) {
             e.printStackTrace()
@@ -169,4 +243,3 @@ class OpenRouterClient(
         }
     }
 }
-

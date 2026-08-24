@@ -2,6 +2,7 @@ package com.pablo.paper.ui.reader
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -9,6 +10,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -30,12 +32,14 @@ import androidx.compose.material.icons.rounded.ArrowDropDown
 import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.Bookmark
 import androidx.compose.material.icons.rounded.BookmarkBorder
+import androidx.compose.material.icons.rounded.BorderColor
 import androidx.compose.material.icons.rounded.CleaningServices
 import androidx.compose.material.icons.rounded.ColorLens
 import androidx.compose.material.icons.rounded.Create
 import androidx.compose.material.icons.rounded.CropPortrait
 import androidx.compose.material.icons.rounded.Description
 import androidx.compose.material.icons.rounded.DocumentScanner
+import androidx.compose.material.icons.rounded.Draw
 import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.FitScreen
 import androidx.compose.material.icons.rounded.Gesture
@@ -128,308 +132,311 @@ fun ReaderToolbar(
             isDarkMode = state.isDarkMode,
             elevation = 8.dp
         ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 8.dp)
-                    .horizontalScroll(rememberScrollState()),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(4.dp)
+            Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center
             ) {
-                // 1. Biblioteca
-                LiquidGlassButton(
-                    onClick = { onAction(ReaderAction.CloseDocument) },
-                    isDarkMode = state.isDarkMode,
-                    shape = RoundedCornerShape(12.dp)
+                Row(
+                    modifier = Modifier
+                        .horizontalScroll(rememberScrollState())
+                        .padding(horizontal = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp, Alignment.CenterHorizontally)
                 ) {
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
+                    // 1. Biblioteca (Icon-only)
+                    LiquidGlassIconButton(
+                        onClick = { onAction(ReaderAction.CloseDocument) },
+                        icon = Icons.AutoMirrored.Rounded.ArrowBack,
                         contentDescription = "Volver a la Biblioteca",
-                        tint = textPrimary,
-                        modifier = Modifier.size(16.dp)
+                        isDarkMode = state.isDarkMode,
+                        size = 34.dp
                     )
-                    Spacer(Modifier.width(4.dp))
-                    Text("Biblioteca", fontWeight = FontWeight.SemiBold, color = textPrimary, fontSize = 13.sp)
-                }
 
-                ToolbarDivider(state.isDarkMode)
+                    ToolbarDivider(state.isDarkMode)
 
-                // 2. Navegación de páginas
-                LiquidGlassIconButton(
-                    onClick = { onAction(ReaderAction.PreviousPage) },
-                    icon = Icons.AutoMirrored.Rounded.ArrowBack,
-                    contentDescription = "Página anterior",
-                    enabled = state.currentPage > 1,
-                    isDarkMode = state.isDarkMode,
-                    size = 32.dp
-                )
-
-                LiquidGlassButton(
-                    onClick = { onAction(ReaderAction.TogglePageNavigator) },
-                    isDarkMode = state.isDarkMode,
-                    shape = RoundedCornerShape(10.dp)
-                ) {
-                    Text(
-                        text = "${state.currentPage} / ${state.pageCount}",
-                        color = textPrimary,
-                        fontSize = 12.5.sp,
-                        fontWeight = FontWeight.Bold
+                    // 2. Navegación de páginas
+                    LiquidGlassIconButton(
+                        onClick = { onAction(ReaderAction.PreviousPage) },
+                        icon = Icons.AutoMirrored.Rounded.ArrowBack,
+                        contentDescription = "Página anterior",
+                        enabled = state.currentPage > 1,
+                        isDarkMode = state.isDarkMode,
+                        size = 34.dp
                     )
-                }
 
-                LiquidGlassIconButton(
-                    onClick = { onAction(ReaderAction.NextPage) },
-                    icon = Icons.AutoMirrored.Rounded.ArrowForward,
-                    contentDescription = "Página siguiente",
-                    enabled = state.currentPage < state.pageCount,
-                    isDarkMode = state.isDarkMode,
-                    size = 32.dp
-                )
+                    LiquidGlassButton(
+                        onClick = { onAction(ReaderAction.TogglePageNavigator) },
+                        isDarkMode = state.isDarkMode,
+                        shape = RoundedCornerShape(10.dp),
+                        contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp, vertical = 6.dp)
+                    ) {
+                        Text(
+                            text = "${state.currentPage} / ${state.pageCount}",
+                            color = textPrimary,
+                            fontSize = 12.5.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
 
-                // Document quick actions
-                LiquidGlassIconButton(
-                    onClick = { onAction(ReaderAction.ToggleBookmark(state.currentPage)) },
-                    icon = if (state.currentPage in state.bookmarkedPages) Icons.Rounded.Bookmark else Icons.Rounded.BookmarkBorder,
-                    contentDescription = "Marcador",
-                    isSelected = state.currentPage in state.bookmarkedPages,
-                    isDarkMode = state.isDarkMode,
-                    size = 32.dp
-                )
-                LiquidGlassIconButton(
-                    onClick = { onAction(ReaderAction.ToggleOutline) },
-                    icon = Icons.AutoMirrored.Rounded.MenuBook,
-                    contentDescription = "Índice",
-                    isSelected = state.activePanel == ReaderPanel.Outline,
-                    isDarkMode = state.isDarkMode,
-                    size = 32.dp
-                )
-                LiquidGlassIconButton(
-                    onClick = { onAction(ReaderAction.ToggleThumbnailsDrawer) },
-                    icon = Icons.Rounded.GridView,
-                    contentDescription = "Miniaturas",
-                    isSelected = state.isThumbnailsDrawerOpen,
-                    isDarkMode = state.isDarkMode,
-                    size = 32.dp
-                )
+                    LiquidGlassIconButton(
+                        onClick = { onAction(ReaderAction.NextPage) },
+                        icon = Icons.AutoMirrored.Rounded.ArrowForward,
+                        contentDescription = "Página siguiente",
+                        enabled = state.currentPage < state.pageCount,
+                        isDarkMode = state.isDarkMode,
+                        size = 34.dp
+                    )
 
-                ToolbarDivider(state.isDarkMode)
+                    // Document quick actions
+                    LiquidGlassIconButton(
+                        onClick = { onAction(ReaderAction.ToggleBookmark(state.currentPage)) },
+                        icon = if (state.currentPage in state.bookmarkedPages) Icons.Rounded.Bookmark else Icons.Rounded.BookmarkBorder,
+                        contentDescription = "Marcador",
+                        isSelected = state.currentPage in state.bookmarkedPages,
+                        isDarkMode = state.isDarkMode,
+                        size = 34.dp
+                    )
+                    LiquidGlassIconButton(
+                        onClick = { onAction(ReaderAction.ToggleOutline) },
+                        icon = Icons.AutoMirrored.Rounded.MenuBook,
+                        contentDescription = "Índice",
+                        isSelected = state.activePanel == ReaderPanel.Outline,
+                        isDarkMode = state.isDarkMode,
+                        size = 34.dp
+                    )
+                    LiquidGlassIconButton(
+                        onClick = { onAction(ReaderAction.ToggleThumbnailsDrawer) },
+                        icon = Icons.Rounded.GridView,
+                        contentDescription = "Miniaturas",
+                        isSelected = state.isThumbnailsDrawerOpen,
+                        isDarkMode = state.isDarkMode,
+                        size = 34.dp
+                    )
 
-                // 3. Herramientas de tinta (Direct Access)
-                LiquidGlassIconButton(
-                    onClick = { onAction(ReaderAction.SelectInkTool(InkTool.HAND)) },
-                    icon = Icons.Rounded.PanTool,
-                    contentDescription = "Mano / Desplazamiento",
-                    isSelected = state.activeInkTool == InkTool.HAND,
-                    isDarkMode = state.isDarkMode,
-                    size = 32.dp
-                )
-                InkIconButton(Icons.Rounded.Create, "Pluma", InkTool.PEN, state, onAction)
-                InkIconButton(Icons.Rounded.HighlightAlt, "Resaltador libre", InkTool.HIGHLIGHTER, state, onAction)
-                InkIconButton(Icons.Rounded.Title, "Resaltador de texto", InkTool.TEXT_HIGHLIGHT, state, onAction)
-                InkIconButton(Icons.Rounded.Rectangle, "Formas geométricas", InkTool.RECTANGLE, state, onAction)
-                InkIconButton(Icons.AutoMirrored.Rounded.StickyNote2, "Nota adhesiva", InkTool.STICKY_NOTE, state, onAction)
-                InkIconButton(Icons.Rounded.TextFields, "Cuadro de texto", InkTool.TEXT_BOX, state, onAction)
-                InkIconButton(Icons.Rounded.Approval, "Sello", InkTool.STAMP, state, onAction)
-                InkIconButton(Icons.Rounded.Gesture, "Lazo de selección", InkTool.LASSO, state, onAction)
-                InkIconButton(Icons.Rounded.CleaningServices, "Borrador", InkTool.ERASER, state, onAction)
+                    ToolbarDivider(state.isDarkMode)
 
-                ToolbarDivider(state.isDarkMode)
+                    // 3. Herramientas de tinta & Selección
+                    LiquidGlassIconButton(
+                        onClick = { onAction(ReaderAction.SelectInkTool(InkTool.HAND)) },
+                        icon = Icons.Rounded.PanTool,
+                        contentDescription = "Mano / Desplazamiento",
+                        isSelected = state.activeInkTool == InkTool.HAND && !state.isSelectTextMode,
+                        isDarkMode = state.isDarkMode,
+                        size = 34.dp
+                    )
+                    LiquidGlassIconButton(
+                        onClick = { onAction(ReaderAction.ToggleSelectTextMode) },
+                        icon = Icons.Rounded.HighlightAlt,
+                        contentDescription = "Seleccionar texto",
+                        isSelected = state.isSelectTextMode || state.activeInkTool == InkTool.SELECT_TEXT,
+                        isDarkMode = state.isDarkMode,
+                        size = 34.dp
+                    )
+                    InkIconButton(Icons.Rounded.Create, "Pluma", InkTool.PEN, state, onAction)
+                    InkIconButton(Icons.Rounded.BorderColor, "Resaltador libre", InkTool.HIGHLIGHTER, state, onAction)
+                    InkIconButton(Icons.Rounded.Title, "Resaltador de texto", InkTool.TEXT_HIGHLIGHT, state, onAction)
+                    InkIconButton(Icons.Rounded.Rectangle, "Formas geométricas", InkTool.RECTANGLE, state, onAction)
+                    InkIconButton(Icons.AutoMirrored.Rounded.StickyNote2, "Nota adhesiva", InkTool.STICKY_NOTE, state, onAction)
+                    InkIconButton(Icons.Rounded.TextFields, "Cuadro de texto", InkTool.TEXT_BOX, state, onAction)
+                    InkIconButton(Icons.Rounded.Approval, "Sello", InkTool.STAMP, state, onAction)
+                    InkIconButton(Icons.Rounded.Gesture, "Lazo de selección", InkTool.LASSO, state, onAction)
+                    InkIconButton(Icons.Rounded.CleaningServices, "Borrador", InkTool.ERASER, state, onAction)
 
-                // 4. Paleta de colores rápidos
-                listOf(
-                    0xFF111827L, // Negro
-                    0xFF174E8CL, // Azul marino
-                    0xFFC2410CL, // Naranja
-                    0xFFB42318L, // Rojo
-                    0xFF6B46C1L, // Púrpura
-                    0xFF0F766EL  // Verde azulado
-                ).forEach { colorLong ->
-                    val isSelected = selectedColor.value.toLong() == colorLong
-                    IconButton(
-                        onClick = { onAction(ReaderAction.SelectColor(colorLong)) },
-                        modifier = Modifier.size(24.dp)
+                    ToolbarDivider(state.isDarkMode)
+
+                    // 4. Selector de color unificado (Un solo botón interactivo)
+                    LiquidGlassButton(
+                        onClick = { onAction(ReaderAction.ToggleColorPicker) },
+                        isSelected = state.showColorPicker,
+                        isDarkMode = state.isDarkMode,
+                        shape = RoundedCornerShape(10.dp),
+                        contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 7.dp, vertical = 6.dp)
                     ) {
                         Box(
                             modifier = Modifier
-                                .size(if (isSelected) 18.dp else 13.dp)
-                                .background(Color(colorLong), CircleShape)
+                                .size(18.dp)
+                                .background(selectedColor, CircleShape)
+                                .border(1.dp, if (state.isDarkMode) Color.White.copy(alpha = 0.7f) else Color.Black.copy(alpha = 0.25f), CircleShape)
+                        )
+                        Spacer(Modifier.width(2.dp))
+                        Icon(
+                            imageVector = Icons.Rounded.ArrowDropDown,
+                            contentDescription = "Paleta de colores",
+                            tint = textSecondary,
+                            modifier = Modifier.size(16.dp)
                         )
                     }
-                }
 
-                // Selector de paleta completa
-                LiquidGlassIconButton(
-                    onClick = { onAction(ReaderAction.ToggleColorPicker) },
-                    icon = Icons.Rounded.Palette,
-                    contentDescription = "Paleta de colores",
-                    isSelected = state.showColorPicker,
-                    isDarkMode = state.isDarkMode,
-                    size = 32.dp
-                )
-
-                // Selector de grosor de trazo
-                listOf(2f to 3.dp, 4f to 6.dp, 7f to 9.dp).forEach { (width, dotSize) ->
-                    val isSelected = kotlin.math.abs(state.selectedStrokeWidth - width) < 0.6f
+                    // 5. Selector de grosor unificado (Sin texto "3.0 pt", solo indicador y flecha)
                     LiquidGlassButton(
-                        onClick = { onAction(ReaderAction.SetStrokeWidth(width)) },
-                        isSelected = isSelected,
+                        onClick = { onAction(ReaderAction.ToggleStrokeWidthPicker) },
+                        isSelected = state.showStrokeWidthPicker,
                         isDarkMode = state.isDarkMode,
-                        shape = CircleShape,
-                        contentPadding = androidx.compose.foundation.layout.PaddingValues(6.dp)
+                        shape = RoundedCornerShape(10.dp),
+                        contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 7.dp, vertical = 6.dp)
                     ) {
                         Box(
-                            Modifier
-                                .size(dotSize)
-                                .background(selectedColor, CircleShape)
+                            modifier = Modifier.size(18.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size((state.selectedStrokeWidth.coerceIn(2.5f, 12f)).dp)
+                                    .background(selectedColor, CircleShape)
+                            )
+                        }
+                        Spacer(Modifier.width(2.dp))
+                        Icon(
+                            imageVector = Icons.Rounded.ArrowDropDown,
+                            contentDescription = "Grosor del trazo",
+                            tint = textSecondary,
+                            modifier = Modifier.size(16.dp)
                         )
                     }
-                }
 
-                ToolbarDivider(state.isDarkMode)
+                    ToolbarDivider(state.isDarkMode)
 
-                // 5. Historial (Deshacer / Rehacer)
-                LiquidGlassIconButton(
-                    onClick = { onAction(ReaderAction.Undo) },
-                    icon = Icons.AutoMirrored.Rounded.Undo,
-                    contentDescription = "Deshacer",
-                    enabled = state.canUndo,
-                    isDarkMode = state.isDarkMode,
-                    size = 32.dp
-                )
-                LiquidGlassIconButton(
-                    onClick = { onAction(ReaderAction.Redo) },
-                    icon = Icons.AutoMirrored.Rounded.Redo,
-                    contentDescription = "Rehacer",
-                    enabled = state.canRedo,
-                    isDarkMode = state.isDarkMode,
-                    size = 32.dp
-                )
-
-                ToolbarDivider(state.isDarkMode)
-
-                // 6. Modo de Página (Dropdown)
-                Box {
-                    val modeLabel = when (state.viewMode) {
-                        ViewMode.FULL_PAGE -> "Página completa"
-                        ViewMode.FIT_WIDTH -> "Ajustar ancho"
-                        ViewMode.CONTINUOUS_SCROLL -> "Scroll continuo"
-                        ViewMode.TWO_PAGE -> "Doble página"
-                        else -> "Página completa"
-                    }
-                    LiquidGlassButton(
-                        onClick = { isViewModeMenuOpen = true },
-                        isDarkMode = state.isDarkMode,
-                        shape = RoundedCornerShape(10.dp)
-                    ) {
-                        Icon(Icons.Rounded.ViewCarousel, null, tint = AccentBlue, modifier = Modifier.size(15.dp))
-                        Spacer(Modifier.width(3.dp))
-                        Text(
-                            text = modeLabel,
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Medium,
-                            color = textPrimary
-                        )
-                        Icon(Icons.Rounded.ArrowDropDown, null, tint = textSecondary, modifier = Modifier.size(16.dp))
-                    }
-
-                    DropdownMenu(
-                        expanded = isViewModeMenuOpen,
-                        onDismissRequest = { isViewModeMenuOpen = false },
-                        modifier = Modifier.background(if (state.isDarkMode) Color(0xFF1E293B) else Color.White)
-                    ) {
-                        DropdownMenuItem(
-                            text = { Text("Página completa", color = textPrimary) },
-                            leadingIcon = { Icon(Icons.Rounded.CropPortrait, null, tint = AccentBlue) },
-                            onClick = {
-                                isViewModeMenuOpen = false
-                                onAction(ReaderAction.SelectViewMode(ViewMode.FULL_PAGE))
-                            }
-                        )
-                        DropdownMenuItem(
-                            text = { Text("Ajustar ancho", color = textPrimary) },
-                            leadingIcon = { Icon(Icons.Rounded.FitScreen, null, tint = AccentBlue) },
-                            onClick = {
-                                isViewModeMenuOpen = false
-                                onAction(ReaderAction.SelectViewMode(ViewMode.FIT_WIDTH))
-                            }
-                        )
-                        DropdownMenuItem(
-                            text = { Text("Scroll continuo", color = textPrimary) },
-                            leadingIcon = { Icon(Icons.Rounded.ViewStream, null, tint = AccentBlue) },
-                            onClick = {
-                                isViewModeMenuOpen = false
-                                onAction(ReaderAction.SelectViewMode(ViewMode.CONTINUOUS_SCROLL))
-                            }
-                        )
-                        DropdownMenuItem(
-                            text = { Text("Doble página", color = textPrimary) },
-                            leadingIcon = { Icon(Icons.AutoMirrored.Rounded.MenuBook, null, tint = AccentBlue) },
-                            onClick = {
-                                isViewModeMenuOpen = false
-                                onAction(ReaderAction.SelectViewMode(ViewMode.TWO_PAGE))
-                            }
-                        )
-                    }
-                }
-
-                // 7. Bionic Reading / Filtros de lectura
-                LiquidGlassButton(
-                    onClick = { onAction(ReaderAction.ToggleBionicReading) },
-                    isSelected = state.isBionicReadingEnabled,
-                    isDarkMode = state.isDarkMode,
-                    shape = RoundedCornerShape(10.dp)
-                ) {
-                    Text("Texto", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = textPrimary)
-                }
-
-                // 8. Búsqueda
-                LiquidGlassIconButton(
-                    onClick = { onAction(ReaderAction.ToggleSearch) },
-                    icon = Icons.Rounded.Search,
-                    contentDescription = "Buscar texto",
-                    isSelected = state.isSearchVisible,
-                    isDarkMode = state.isDarkMode,
-                    size = 34.dp
-                )
-
-                // 9. Notas del documento
-                LiquidGlassButton(
-                    onClick = { onAction(ReaderAction.TogglePanel(ReaderPanel.Markdown)) },
-                    isSelected = state.activePanel == ReaderPanel.Markdown,
-                    isDarkMode = state.isDarkMode,
-                    shape = RoundedCornerShape(10.dp)
-                ) {
-                    Icon(Icons.Rounded.Description, null, tint = AccentBlue, modifier = Modifier.size(15.dp))
-                    Spacer(Modifier.width(3.dp))
-                    Text("Notas", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = textPrimary)
-                }
-
-                // 10. Botón Asistente IA (Destacado)
-                LiquidGlassButton(
-                    onClick = { onAction(ReaderAction.TogglePanel(ReaderPanel.Assistant)) },
-                    isSelected = state.activePanel == ReaderPanel.Assistant,
-                    isDarkMode = state.isDarkMode,
-                    shape = RoundedCornerShape(12.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Rounded.AutoAwesome,
-                        contentDescription = "Asistente IA",
-                        tint = Color(0xFF8B5CF6),
-                        modifier = Modifier.size(16.dp)
-                    )
-                    Spacer(Modifier.width(4.dp))
-                    Text(
-                        text = "IA",
-                        fontSize = 12.5.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = if (state.activePanel == ReaderPanel.Assistant) Color(0xFF8B5CF6) else textPrimary
-                    )
-                }
-
-                // 11. Menú "Más herramientas"
-                Box {
+                    // 6. Historial (Deshacer / Rehacer)
                     LiquidGlassIconButton(
-                        onClick = { isMoreOpen = true },
+                        onClick = { onAction(ReaderAction.Undo) },
+                        icon = Icons.AutoMirrored.Rounded.Undo,
+                        contentDescription = "Deshacer",
+                        enabled = state.canUndo,
+                        isDarkMode = state.isDarkMode,
+                        size = 34.dp
+                    )
+                    LiquidGlassIconButton(
+                        onClick = { onAction(ReaderAction.Redo) },
+                        icon = Icons.AutoMirrored.Rounded.Redo,
+                        contentDescription = "Rehacer",
+                        enabled = state.canRedo,
+                        isDarkMode = state.isDarkMode,
+                        size = 34.dp
+                    )
+
+                    ToolbarDivider(state.isDarkMode)
+
+                    // 7. Modo de Página (Dropdown - Icon-only)
+                    Box {
+                        LiquidGlassButton(
+                            onClick = { isViewModeMenuOpen = true },
+                            isDarkMode = state.isDarkMode,
+                            shape = RoundedCornerShape(10.dp),
+                            contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 7.dp, vertical = 6.dp)
+                        ) {
+                            Icon(Icons.Rounded.ViewCarousel, "Modo de visualización", tint = AccentBlue, modifier = Modifier.size(17.dp))
+                            Spacer(Modifier.width(2.dp))
+                            Icon(Icons.Rounded.ArrowDropDown, null, tint = textSecondary, modifier = Modifier.size(16.dp))
+                        }
+
+                        DropdownMenu(
+                            expanded = isViewModeMenuOpen,
+                            onDismissRequest = { isViewModeMenuOpen = false },
+                            modifier = Modifier.background(if (state.isDarkMode) Color(0xFF1E293B) else Color.White)
+                        ) {
+                            DropdownMenuItem(
+                                text = { Text("Página completa", color = textPrimary) },
+                                leadingIcon = { Icon(Icons.Rounded.CropPortrait, null, tint = AccentBlue) },
+                                onClick = {
+                                    isViewModeMenuOpen = false
+                                    onAction(ReaderAction.SelectViewMode(ViewMode.FULL_PAGE))
+                                }
+                            )
+                            DropdownMenuItem(
+                                text = { Text("Ajustar ancho", color = textPrimary) },
+                                leadingIcon = { Icon(Icons.Rounded.FitScreen, null, tint = AccentBlue) },
+                                onClick = {
+                                    isViewModeMenuOpen = false
+                                    onAction(ReaderAction.SelectViewMode(ViewMode.FIT_WIDTH))
+                                }
+                            )
+                            DropdownMenuItem(
+                                text = { Text("Scroll continuo", color = textPrimary) },
+                                leadingIcon = { Icon(Icons.Rounded.ViewStream, null, tint = AccentBlue) },
+                                onClick = {
+                                    isViewModeMenuOpen = false
+                                    onAction(ReaderAction.SelectViewMode(ViewMode.CONTINUOUS_SCROLL))
+                                }
+                            )
+                            DropdownMenuItem(
+                                text = { Text("Doble página", color = textPrimary) },
+                                leadingIcon = { Icon(Icons.AutoMirrored.Rounded.MenuBook, null, tint = AccentBlue) },
+                                onClick = {
+                                    isViewModeMenuOpen = false
+                                    onAction(ReaderAction.SelectViewMode(ViewMode.TWO_PAGE))
+                                }
+                            )
+                        }
+                    }
+
+                    // 8. Búsqueda
+                    LiquidGlassIconButton(
+                        onClick = { onAction(ReaderAction.ToggleSearch) },
+                        icon = Icons.Rounded.Search,
+                        contentDescription = "Buscar texto",
+                        isSelected = state.isSearchVisible,
+                        isDarkMode = state.isDarkMode,
+                        size = 34.dp
+                    )
+
+                    // 9. Modo Máscara de Estudio (Active Recall)
+                    LiquidGlassIconButton(
+                        onClick = { onAction(ReaderAction.ToggleStudyMask) },
+                        icon = Icons.Rounded.DocumentScanner,
+                        contentDescription = "Máscara de estudio (Active Recall)",
+                        isSelected = state.isStudyMaskEnabled,
+                        isDarkMode = state.isDarkMode,
+                        accentColor = Color(0xFFF59E0B),
+                        size = 34.dp
+                    )
+
+                    // 10. Regla Digital
+                    LiquidGlassIconButton(
+                        onClick = { onAction(ReaderAction.ToggleDigitalRuler) },
+                        icon = Icons.Rounded.Draw,
+                        contentDescription = "Regla digital",
+                        isSelected = state.isDigitalRulerVisible,
+                        isDarkMode = state.isDarkMode,
+                        accentColor = Color(0xFF3B82F6),
+                        size = 34.dp
+                    )
+
+                    // 11. Flashcards y Tests IA
+                    LiquidGlassIconButton(
+                        onClick = { onAction(ReaderAction.ToggleFlashcardModal) },
+                        icon = Icons.AutoMirrored.Rounded.MenuBook,
+                        contentDescription = "Flashcards y Tests de Estudio",
+                        isSelected = state.isFlashcardModalOpen,
+                        isDarkMode = state.isDarkMode,
+                        accentColor = Color(0xFF10B981),
+                        size = 34.dp
+                    )
+
+                    // 12. Notas del documento (Icon-only)
+                    LiquidGlassIconButton(
+                        onClick = { onAction(ReaderAction.TogglePanel(ReaderPanel.Markdown)) },
+                        icon = Icons.Rounded.Description,
+                        contentDescription = "Notas del documento",
+                        isSelected = state.activePanel == ReaderPanel.Markdown,
+                        isDarkMode = state.isDarkMode,
+                        size = 34.dp
+                    )
+
+                    // 13. Botón Asistente IA (Icon-only)
+                    LiquidGlassIconButton(
+                        onClick = { onAction(ReaderAction.TogglePanel(ReaderPanel.Assistant)) },
+                        icon = Icons.Rounded.AutoAwesome,
+                        contentDescription = "Asistente IA",
+                        isSelected = state.activePanel == ReaderPanel.Assistant,
+                        isDarkMode = state.isDarkMode,
+                        accentColor = Color(0xFF8B5CF6),
+                        size = 34.dp
+                    )
+
+                    // 14. Menú "Más herramientas"
+                    Box {
+                        LiquidGlassIconButton(
+                            onClick = { isMoreOpen = true },
                         icon = Icons.Rounded.MoreHoriz,
                         contentDescription = "Más herramientas",
                         isDarkMode = state.isDarkMode,
@@ -441,6 +448,23 @@ fun ReaderToolbar(
                         onDismissRequest = { isMoreOpen = false },
                         modifier = Modifier.background(if (state.isDarkMode) Color(0xFF1E293B) else Color.White)
                     ) {
+                        DropdownMenuItem(
+                            text = { Text("Insertar página de notas en blanco", color = textPrimary) },
+                            leadingIcon = { Icon(Icons.Rounded.Description, null, tint = AccentBlue) },
+                            onClick = {
+                                isMoreOpen = false
+                                onAction(ReaderAction.InsertBlankPage(state.currentPage))
+                            }
+                        )
+                        DropdownMenuItem(
+                            text = { Text("Borrador: ${if (state.eraserMode == com.pablo.paper.domain.model.EraserMode.STROKE) "Trazo completo" else "Precisión"}", color = textPrimary) },
+                            leadingIcon = { Icon(Icons.Rounded.CleaningServices, null, tint = textSecondary) },
+                            onClick = {
+                                isMoreOpen = false
+                                val nextMode = if (state.eraserMode == com.pablo.paper.domain.model.EraserMode.STROKE) com.pablo.paper.domain.model.EraserMode.PRECISION else com.pablo.paper.domain.model.EraserMode.STROKE
+                                onAction(ReaderAction.SelectEraserMode(nextMode))
+                            }
+                        )
                         DropdownMenuItem(
                             text = { Text("Organizar páginas", color = textPrimary) },
                             leadingIcon = { Icon(Icons.Rounded.GridView, null, tint = textSecondary) },
@@ -495,6 +519,7 @@ fun ReaderToolbar(
         }
     }
 }
+}
 
 @Composable
 private fun InkIconButton(
@@ -508,9 +533,9 @@ private fun InkIconButton(
         onClick = { onAction(ReaderAction.SelectInkTool(tool)) },
         icon = icon,
         contentDescription = description,
-        isSelected = state.activeInkTool == tool,
+        isSelected = state.activeInkTool == tool && !state.isSelectTextMode,
         isDarkMode = state.isDarkMode,
-        size = 32.dp
+        size = 34.dp
     )
 }
 

@@ -24,6 +24,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -229,7 +230,7 @@ fun ReaderScreen(
                                 onOpenTextBox = { viewModel.onAction(ReaderAction.OpenTextBoxDialog(it)) },
                                 onNewTextBox = { viewModel.onAction(ReaderAction.OpenTextBoxDialog(null, it)) },
                                 onOpenStamp = { viewModel.onAction(ReaderAction.OpenStampDialog(it)) },
-                                onMoveAnnotation = { id, point -> viewModel.onAction(ReaderAction.MoveAnnotation(id, point)) },
+                                onMoveAnnotation = { id, point -> viewModel.onAction(ReaderAction.MoveAnnotation(id, point, state.currentPage - 1)) },
                                 onPerformUndo = { viewModel.onAction(ReaderAction.Undo) },
                                 onPerformRedo = { viewModel.onAction(ReaderAction.Redo) },
                                 onCycleColor = {
@@ -240,6 +241,22 @@ fun ReaderScreen(
                                 },
                                 onToggleSelectMode = { viewModel.onAction(ReaderAction.ToggleSelectTextMode) },
                                 modifier = Modifier.fillMaxSize()
+                            )
+                        }
+
+                        // Active Recall Study Mask Overlay
+                        if (state.isStudyMaskEnabled) {
+                            var currentAnnots by androidx.compose.runtime.remember(state.currentPage) {
+                                androidx.compose.runtime.mutableStateOf<List<com.pablo.paper.domain.model.Annotation>>(emptyList())
+                            }
+                            androidx.compose.runtime.LaunchedEffect(state.currentPage) {
+                                currentAnnots = viewModel.getAnnotationsForPage(state.currentPage - 1)
+                            }
+                            StudyMaskOverlay(
+                                annotations = currentAnnots,
+                                pageBounds = pageBounds,
+                                revealedMaskIds = state.revealedMaskIds,
+                                onToggleMask = { viewModel.onAction(ReaderAction.ToggleMaskItem(it)) }
                             )
                         }
                     }
@@ -332,14 +349,14 @@ fun ReaderScreen(
 
                 // Layer 4: Floating Page Navigator (Bottom)
                 PageNavigator(
-                    visible = state.showPageNavigator,
+                    visible = !state.isToolbarCollapsed,
                     currentPage = state.currentPage,
                     pageCount = state.pageCount,
                     isDarkMode = state.isDarkMode,
                     onPageSelected = { viewModel.onAction(ReaderAction.GoToPage(it)) },
                     onToggleOutline = { viewModel.onAction(ReaderAction.ToggleOutline) },
                     onTogglePageGrid = { viewModel.onAction(ReaderAction.TogglePageGrid) },
-                    onClose = { viewModel.onAction(ReaderAction.SetPageNavigatorVisible(false)) },
+                    onClose = { viewModel.onAction(ReaderAction.ToggleToolbarCollapse) },
                     modifier = Modifier
                         .align(Alignment.BottomCenter)
                         .zIndex(10f)
@@ -356,6 +373,7 @@ fun ReaderScreen(
                             state.selectedColor
                         },
                         recentColors = state.recentColors,
+                        isDarkMode = state.isDarkMode,
                         onColorSelected = { viewModel.onAction(ReaderAction.SelectColor(it)) },
                         onDismissRequest = { viewModel.onAction(ReaderAction.SetColorPickerVisible(false)) }
                     )
@@ -370,6 +388,7 @@ fun ReaderScreen(
                         } else {
                             state.selectedColor
                         },
+                        isDarkMode = state.isDarkMode,
                         onWidthSelected = { viewModel.onAction(ReaderAction.SetStrokeWidth(it)) },
                         onDismissRequest = { viewModel.onAction(ReaderAction.SetStrokeWidthPickerVisible(false)) }
                     )
@@ -636,6 +655,22 @@ fun ReaderScreen(
                         onAction = { viewModel.onAction(it) }
                     )
                 }
+
+                // Layer 22: Digital Ruler Straightedge
+                DigitalRulerOverlay(
+                    isVisible = state.isDigitalRulerVisible,
+                    onClose = { viewModel.onAction(ReaderAction.ToggleDigitalRuler) }
+                )
+
+                // Layer 23: Interactive AI Flashcards & Quiz Modal
+                FlashcardQuizModal(
+                    isOpen = state.isFlashcardModalOpen,
+                    onClose = { viewModel.onAction(ReaderAction.ToggleFlashcardModal) },
+                    flashcards = state.flashcards,
+                    quizzes = state.quizzes,
+                    isLoading = state.isStudyGenerating,
+                    onGenerateWithAi = { isQuiz -> viewModel.onAction(ReaderAction.GenerateStudyContent(isQuiz)) }
+                )
             }
         }
     }

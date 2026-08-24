@@ -16,6 +16,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.EditNote
+import androidx.compose.material.icons.rounded.UnfoldLess
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -53,6 +54,7 @@ fun StickyNoteDialog(
     isDarkMode: Boolean = false,
     onSave: (String) -> Unit,
     onDelete: (() -> Unit)? = null,
+    onMinimize: (() -> Unit)? = null,
     onDismissRequest: () -> Unit
 ) {
     var text by remember { mutableStateOf(initialText) }
@@ -113,6 +115,23 @@ fun StickyNoteDialog(
                 }
 
                 Row {
+                    if (onMinimize != null) {
+                        IconButton(
+                            onClick = {
+                                onMinimize()
+                                onDismissRequest()
+                            },
+                            modifier = Modifier.size(32.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Rounded.UnfoldLess,
+                                contentDescription = "Minimizar",
+                                tint = secTextColor,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+                    }
+
                     if (onDelete != null) {
                         IconButton(
                             onClick = {

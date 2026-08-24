@@ -6,6 +6,10 @@ import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
 
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+
 enum class StylusButton {
     PRIMARY,
     SECONDARY
@@ -23,6 +27,29 @@ object StylusInputDispatcher {
 
     private var isPrimaryPressed = false
     private var isSecondaryPressed = false
+
+    private val _isStylusHovering = MutableStateFlow(false)
+    val isStylusHovering: StateFlow<Boolean> = _isStylusHovering.asStateFlow()
+
+    private val _isStylusTouching = MutableStateFlow(false)
+    val isStylusTouching: StateFlow<Boolean> = _isStylusTouching.asStateFlow()
+
+    @Volatile
+    private var lastStylusActiveUptimeMs: Long = 0L
+
+    /**
+     * Returns true if the stylus is actively touching the screen, or hovering within cursor proximity (< ~1-2cm),
+     * or within a small temporal grace period (350ms) after the stylus lifted.
+     */
+    fun isStylusNearOrTouching(): Boolean {
+        val now = android.os.SystemClock.uptimeMillis()
+        return _isStylusTouching.value || _isStylusHovering.value || (now - lastStylusActiveUptimeMs < 350L)
+    }
+
+    fun notifyStylusActive() {
+        lastStylusActiveUptimeMs = android.os.SystemClock.uptimeMillis()
+        _isStylusHovering.value = true
+    }
 
     fun onKeyEvent(event: KeyEvent): Boolean {
         val isDown = event.action == KeyEvent.ACTION_DOWN
@@ -74,11 +101,50 @@ object StylusInputDispatcher {
     }
 
     fun onGenericMotionEvent(event: MotionEvent): Boolean {
+        val isStylus = isStylusEvent(event)
+        if (isStylus) {
+            lastStylusActiveUptimeMs = android.os.SystemClock.uptimeMillis()
+            when (event.actionMasked) {
+                MotionEvent.ACTION_HOVER_ENTER, MotionEvent.ACTION_HOVER_MOVE -> {
+                    _isStylusHovering.value = true
+                }
+                MotionEvent.ACTION_HOVER_EXIT -> {
+                    _isStylusHovering.value = false
+                }
+            }
+        }
         return processMotionEvent(event)
     }
 
     fun onTouchEvent(event: MotionEvent): Boolean {
+        val isStylus = isStylusEvent(event)
+        if (isStylus) {
+            lastStylusActiveUptimeMs = android.os.SystemClock.uptimeMillis()
+            when (event.actionMasked) {
+                MotionEvent.ACTION_DOWN, MotionEvent.ACTION_MOVE, MotionEvent.ACTION_POINTER_DOWN -> {
+                    _isStylusTouching.value = true
+                    _isStylusHovering.value = true
+                }
+                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                    _isStylusTouching.value = false
+                }
+            }
+        } else {
+            if (event.actionMasked == MotionEvent.ACTION_UP || event.actionMasked == MotionEvent.ACTION_CANCEL) {
+                _isStylusTouching.value = false
+            }
+        }
         return processMotionEvent(event)
+    }
+
+    private fun isStylusEvent(event: MotionEvent): Boolean {
+        for (i in 0 until event.pointerCount) {
+            val tool = event.getToolType(i)
+            if (tool == MotionEvent.TOOL_TYPE_STYLUS || tool == MotionEvent.TOOL_TYPE_ERASER) {
+                return true
+            }
+        }
+        return false
     }
 
     private fun processMotionEvent(event: MotionEvent): Boolean {

@@ -20,13 +20,11 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
@@ -37,22 +35,16 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Popup
 import androidx.compose.ui.window.PopupProperties
 import com.pablo.paper.domain.model.InkTool
+import com.pablo.paper.ui.common.LiquidGlassSurface
 import com.pablo.paper.ui.theme.AccentBlue
-import com.pablo.paper.ui.theme.BorderSubtle
-import com.pablo.paper.ui.theme.SurfaceToolbar
 import com.pablo.paper.ui.theme.TextPrimary
+import com.pablo.paper.ui.theme.TextPrimaryDark
 import com.pablo.paper.ui.theme.TextSecondary
+import com.pablo.paper.ui.theme.TextSecondaryDark
 
 data class StrokePreset(
     val label: String,
     val widthDp: Float
-)
-
-val DEFAULT_STROKE_PRESETS = listOf(
-    StrokePreset("Fine", 1.5f),
-    StrokePreset("Medium", 3.0f),
-    StrokePreset("Thick", 6.0f),
-    StrokePreset("Heavy", 10.0f)
 )
 
 @Composable
@@ -60,38 +52,41 @@ fun StrokeWidthPopover(
     tool: InkTool,
     currentWidth: Float,
     currentColor: Long,
+    isDarkMode: Boolean = false,
     onWidthSelected: (Float) -> Unit,
     onDismissRequest: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val isHighlighter = tool == InkTool.HIGHLIGHTER || tool == InkTool.TEXT_HIGHLIGHT
     val isEraser = tool == InkTool.ERASER
+    val textPrimary = if (isDarkMode) TextPrimaryDark else TextPrimary
+    val textSecondary = if (isDarkMode) TextSecondaryDark else TextSecondary
 
     val presets = when {
         isHighlighter -> listOf(
-            StrokePreset("Fine", 8.0f),
-            StrokePreset("Medium", 14.0f),
-            StrokePreset("Thick", 20.0f),
-            StrokePreset("Wide", 28.0f)
+            StrokePreset("Fino", 8.0f),
+            StrokePreset("Medio", 14.0f),
+            StrokePreset("Grueso", 20.0f),
+            StrokePreset("Ancho", 28.0f)
         )
         isEraser -> listOf(
-            StrokePreset("Small", 10.0f),
-            StrokePreset("Medium", 20.0f),
-            StrokePreset("Large", 35.0f),
-            StrokePreset("Block", 50.0f)
+            StrokePreset("Fino", 10.0f),
+            StrokePreset("Medio", 20.0f),
+            StrokePreset("Grande", 35.0f),
+            StrokePreset("Bloque", 50.0f)
         )
         else -> listOf(
-            StrokePreset("Fine", 1.2f),
-            StrokePreset("Medium", 2.0f),
-            StrokePreset("Thick", 3.5f),
-            StrokePreset("Heavy", 5.5f)
+            StrokePreset("Fino", 1.2f),
+            StrokePreset("Medio", 2.5f),
+            StrokePreset("Grueso", 4.5f),
+            StrokePreset("Fuerte", 7.0f)
         )
     }
 
     val valueRange = when {
         isHighlighter -> 5.0f..35.0f
         isEraser -> 5.0f..60.0f
-        else -> 0.5f..10.0f
+        else -> 0.5f..12.0f
     }
 
     val safeWidth = currentWidth.coerceIn(valueRange.start, valueRange.endInclusive)
@@ -102,9 +97,10 @@ fun StrokeWidthPopover(
         onDismissRequest = onDismissRequest,
         properties = PopupProperties(focusable = true, dismissOnClickOutside = true)
     ) {
-        com.pablo.paper.ui.common.LiquidGlassSurface(
+        LiquidGlassSurface(
             modifier = modifier.width(340.dp),
             shape = RoundedCornerShape(20.dp),
+            isDarkMode = isDarkMode,
             elevation = 16.dp
         ) {
             Column(
@@ -118,15 +114,15 @@ fun StrokeWidthPopover(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = "Stroke Thickness",
+                        text = "Grosor del Trazo",
                         style = MaterialTheme.typography.titleSmall.copy(
-                            color = TextPrimary,
+                            color = textPrimary,
                             fontWeight = FontWeight.SemiBold,
                             fontSize = 15.sp
                         )
                     )
                     Text(
-                        text = "${String.format("%.1f", safeWidth)} pt",
+                        text = "${String.format(java.util.Locale.US, "%.1f", safeWidth)} pt",
                         style = MaterialTheme.typography.bodySmall.copy(
                             color = AccentBlue,
                             fontWeight = FontWeight.Bold,
@@ -144,7 +140,7 @@ fun StrokeWidthPopover(
                         .fillMaxWidth()
                         .height(48.dp)
                         .clip(RoundedCornerShape(8.dp))
-                        .background(Color(0xFFF2F2F7)),
+                        .background(if (isDarkMode) Color(0xFF1E293B) else Color(0xFFF2F2F7)),
                     contentAlignment = Alignment.Center
                 ) {
                     Canvas(modifier = Modifier.fillMaxWidth(0.85f).height(32.dp)) {
@@ -178,7 +174,7 @@ fun StrokeWidthPopover(
                                 .weight(1f)
                                 .padding(horizontal = 3.dp)
                                 .clip(RoundedCornerShape(8.dp))
-                                .background(if (isSelected) AccentBlue else Color(0xFFF2F2F7))
+                                .background(if (isSelected) AccentBlue else if (isDarkMode) Color(0xFF1E293B) else Color(0xFFF2F2F7))
                                 .clickable { onWidthSelected(preset.widthDp) }
                                 .padding(vertical = 8.dp),
                             contentAlignment = Alignment.Center
@@ -198,13 +194,13 @@ fun StrokeWidthPopover(
                                             }
                                         )
                                         .clip(CircleShape)
-                                        .background(if (isSelected) Color.White else TextPrimary)
+                                        .background(if (isSelected) Color.White else textPrimary)
                                 )
                                 Spacer(modifier = Modifier.height(4.dp))
                                 Text(
                                     text = preset.label,
                                     style = MaterialTheme.typography.labelSmall.copy(
-                                        color = if (isSelected) Color.White else TextSecondary,
+                                        color = if (isSelected) Color.White else textSecondary,
                                         fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
                                         fontSize = 11.sp
                                     )
@@ -224,7 +220,7 @@ fun StrokeWidthPopover(
                     colors = SliderDefaults.colors(
                         thumbColor = AccentBlue,
                         activeTrackColor = AccentBlue,
-                        inactiveTrackColor = Color(0xFFE5E5EA)
+                        inactiveTrackColor = if (isDarkMode) Color(0xFF334155) else Color(0xFFE5E5EA)
                     ),
                     modifier = Modifier.fillMaxWidth()
                 )

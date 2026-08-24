@@ -127,7 +127,7 @@ fun PageNavigator(
                         // Page input label & box
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Text(
-                                text = "Page",
+                                text = "Pág.",
                                 style = MaterialTheme.typography.bodyMedium.copy(
                                     color = primaryTextColor,
                                     fontSize = 14.sp,
@@ -176,7 +176,7 @@ fun PageNavigator(
 
                             val progressPct = if (pageCount > 0) ((currentPage.toFloat() / pageCount.toFloat()) * 100).toInt() else 0
                             Text(
-                                text = "of $pageCount · $progressPct%",
+                                text = "de $pageCount · $progressPct%",
                                 style = MaterialTheme.typography.bodyMedium.copy(
                                     color = secondaryTextColor,
                                     fontSize = 13.sp
@@ -244,7 +244,7 @@ fun PageNavigator(
                                 modifier = Modifier.height(34.dp)
                             ) {
                                 Text(
-                                    text = "Go",
+                                    text = "Ir",
                                     style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold)
                                 )
                             }
@@ -253,7 +253,7 @@ fun PageNavigator(
                             IconButton(onClick = onToggleOutline, modifier = Modifier.size(32.dp)) {
                                 Icon(
                                     imageVector = Icons.AutoMirrored.Rounded.MenuBook,
-                                    contentDescription = "Table of Contents",
+                                    contentDescription = "Índice",
                                     tint = primaryTextColor,
                                     modifier = Modifier.size(18.dp)
                                 )
@@ -263,7 +263,7 @@ fun PageNavigator(
                             IconButton(onClick = onTogglePageGrid, modifier = Modifier.size(32.dp)) {
                                 Icon(
                                     imageVector = Icons.Rounded.GridView,
-                                    contentDescription = "Thumbnails",
+                                    contentDescription = "Miniaturas",
                                     tint = primaryTextColor,
                                     modifier = Modifier.size(18.dp)
                                 )
@@ -273,7 +273,7 @@ fun PageNavigator(
                             IconButton(onClick = onClose, modifier = Modifier.size(32.dp)) {
                                 Icon(
                                     imageVector = Icons.Rounded.Close,
-                                    contentDescription = "Close",
+                                    contentDescription = "Cerrar",
                                     tint = secondaryTextColor,
                                     modifier = Modifier.size(18.dp)
                                 )

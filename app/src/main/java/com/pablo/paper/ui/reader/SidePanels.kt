@@ -29,7 +29,7 @@ fun SidePanels(
     notesText: String,
     assistantMessages: List<com.pablo.paper.domain.model.AssistantMessage>,
     isAssistantLoading: Boolean,
-    aiProvider: com.pablo.paper.ai.AiProvider = com.pablo.paper.ai.AiProvider.GOOGLE_GEMINI,
+    aiProvider: com.pablo.paper.ai.AiProvider = com.pablo.paper.ai.AiProvider.OPENROUTER,
     selectedAiModel: String,
     openRouterApiKey: String,
     isApiKeyDialogOpen: Boolean,

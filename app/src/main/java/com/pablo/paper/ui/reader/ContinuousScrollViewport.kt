@@ -227,9 +227,10 @@ private fun ContinuousPageItem(
             .padding(vertical = 4.dp),
         contentAlignment = Alignment.Center
     ) {
+        val densityVal = LocalDensity.current.density
         val maxW = maxWidth
-        val widthPx = (constraints.maxWidth).coerceIn(800, 3200)
-        val heightPx = (widthPx / aspectRatio).toInt().coerceIn(1000, 4200)
+        val widthPx = (constraints.maxWidth.toFloat() * densityVal * 1.25f).toInt().coerceIn(1800, 4800)
+        val heightPx = (widthPx / aspectRatio).toInt().coerceIn(2400, 6400)
 
         LaunchedEffect(pageIndex, widthPx, heightPx) {
             val bmp = onRenderPage(pageIndex, widthPx, heightPx)
@@ -300,8 +301,17 @@ private fun ContinuousPageItem(
                 onNewStickyNote = { onAction(ReaderAction.OpenStickyNoteDialog(null, it)) },
                 onOpenTextBox = { onAction(ReaderAction.OpenTextBoxDialog(it)) },
                 onNewTextBox = { onAction(ReaderAction.OpenTextBoxDialog(null, it)) },
-                onOpenStamp = { onAction(ReaderAction.OpenStampDialog(it)) },
-                onMoveAnnotation = { id, point -> onAction(ReaderAction.MoveAnnotation(id, point)) },
+                onMoveAnnotation = { id, point ->
+                    pageAnnotations = pageAnnotations.map {
+                        if (it.id == id) {
+                            it.copy(
+                                stroke = it.stroke?.copy(points = listOf(point)),
+                                updatedAt = System.currentTimeMillis()
+                            )
+                        } else it
+                    }
+                    onAction(ReaderAction.MoveAnnotation(id, point, pageIndex))
+                },
                 onPerformUndo = { onAction(ReaderAction.Undo) },
                 onPerformRedo = { onAction(ReaderAction.Redo) },
                 onCycleColor = {

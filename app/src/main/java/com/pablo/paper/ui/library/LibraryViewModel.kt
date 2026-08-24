@@ -71,7 +71,7 @@ class LibraryViewModel(
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000),
-            initialValue = com.pablo.paper.ai.AiProvider.GOOGLE_GEMINI
+            initialValue = com.pablo.paper.ai.AiProvider.OPENROUTER
         )
 
     val selectedAiModel: StateFlow<String> = preferencesRepository.selectedAiModelFlow
@@ -93,12 +93,17 @@ class LibraryViewModel(
     init {
         viewModelScope.launch {
             try {
-                val downloadDir = android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_DOWNLOADS)
-                if (downloadDir != null && downloadDir.exists()) {
-                    downloadDir.listFiles { file -> file.extension.equals("pdf", ignoreCase = true) }?.forEach { pdfFile ->
-                        documentRepository.importDocumentFromUri(android.net.Uri.fromFile(pdfFile))
-                    }
-                }
+                documentRepository.syncDocumentsDirectory()
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+    }
+
+    fun refreshDocuments() {
+        viewModelScope.launch {
+            try {
+                documentRepository.syncDocumentsDirectory()
             } catch (e: Exception) {
                 e.printStackTrace()
             }

@@ -98,14 +98,15 @@ fun rememberTextureShader(
                 val random = java.util.Random(1337)
                 val sizeF = size.toFloat()
 
-                // 1. Base micro-stipples (cotton pulp texture) with toroidal wrap - ultra fine & subtle
+                // 1. Base micro-stipples (cotton pulp texture) with toroidal wrap - ultra subtle & organic
                 val stipplePaint = Paint(Paint.ANTI_ALIAS_FLAG)
-                for (i in 0 until 4000) {
+                for (i in 0 until 3500) {
                     val x = random.nextFloat() * sizeF
                     val y = random.nextFloat() * sizeF
-                    val radius = 0.25f + random.nextFloat() * 0.70f
-                    val alpha = if (isDark) (5 + random.nextInt(10)) else (4 + random.nextInt(8))
-                    stipplePaint.color = if (isDark) (alpha shl 24) or 0x00FFFFFF else (alpha shl 24)
+                    val radius = 0.25f + random.nextFloat() * 0.65f
+                    val alpha = if (isDark) (3 + random.nextInt(6)) else (4 + random.nextInt(8))
+                    // In dark mode: dark micro-pores (black/charcoal) with very low alpha
+                    stipplePaint.color = if (isDark) ((alpha shl 24) or 0x00000000) else (alpha shl 24)
 
                     for (dx in floatArrayOf(-sizeF, 0f, sizeF)) {
                         for (dy in floatArrayOf(-sizeF, 0f, sizeF)) {
@@ -120,18 +121,18 @@ fun rememberTextureShader(
 
                 // 2. Interlocking delicate organic paper fibers with toroidal wrap
                 val fiberPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                    strokeWidth = 0.55f
+                    strokeWidth = 0.5f
                     style = Paint.Style.STROKE
                 }
-                for (i in 0 until 220) {
+                for (i in 0 until 180) {
                     val x = random.nextFloat() * sizeF
                     val y = random.nextFloat() * sizeF
-                    val len = 2.5f + random.nextFloat() * 6.0f
+                    val len = 2.0f + random.nextFloat() * 5.0f
                     val angle = random.nextFloat() * kotlin.math.PI.toFloat()
                     val x2 = x + kotlin.math.cos(angle) * len
                     val y2 = y + kotlin.math.sin(angle) * len
-                    val alpha = if (isDark) (6 + random.nextInt(10)) else (5 + random.nextInt(8))
-                    fiberPaint.color = if (isDark) (alpha shl 24) or 0x00FFFFFF else (alpha shl 24)
+                    val alpha = if (isDark) (4 + random.nextInt(6)) else (5 + random.nextInt(8))
+                    fiberPaint.color = if (isDark) ((alpha shl 24) or 0x00000000) else (alpha shl 24)
 
                     for (dx in floatArrayOf(-sizeF, 0f, sizeF)) {
                         for (dy in floatArrayOf(-sizeF, 0f, sizeF)) {
@@ -149,13 +150,13 @@ fun rememberTextureShader(
                 val random = java.util.Random(9999)
                 val sizeF = size.toFloat()
 
-                // 1. Organic cloudy mottling / aging blotches (soft radiant warm clouds - luminous, not dark)
-                for (i in 0 until 28) {
+                // 1. Organic cloudy mottling / aging blotches (soft warm dark clouds in dark mode - no milky haze)
+                for (i in 0 until 24) {
                     val cx = random.nextFloat() * sizeF
                     val cy = random.nextFloat() * sizeF
-                    val radius = 80f + random.nextFloat() * 160f
-                    val baseAlpha = if (isDark) (4 + random.nextInt(8)) else (3 + random.nextInt(6))
-                    val colorCenter = if (isDark) ((baseAlpha shl 24) or 0x00E0D4B8) else ((baseAlpha shl 24) or 0x00B89C68)
+                    val radius = 80f + random.nextFloat() * 140f
+                    val baseAlpha = if (isDark) (3 + random.nextInt(5)) else (3 + random.nextInt(6))
+                    val colorCenter = if (isDark) ((baseAlpha shl 24) or 0x00000000) else ((baseAlpha shl 24) or 0x00B89C68)
                     val colorEdge = 0x00000000
 
                     for (dx in floatArrayOf(-sizeF, 0f, sizeF)) {
@@ -177,14 +178,14 @@ fun rememberTextureShader(
                     }
                 }
 
-                // 2. Vintage specks & flecks with toroidal wrap - light and delicate
+                // 2. Vintage specks & flecks with toroidal wrap - delicate and deep
                 val speckPaint = Paint(Paint.ANTI_ALIAS_FLAG)
-                for (i in 0 until 600) {
+                for (i in 0 until 400) {
                     val x = random.nextFloat() * sizeF
                     val y = random.nextFloat() * sizeF
-                    val r = 0.3f + random.nextFloat() * 0.9f
-                    val alpha = if (isDark) (6 + random.nextInt(12)) else (5 + random.nextInt(10))
-                    speckPaint.color = if (isDark) ((alpha shl 24) or 0x00F5EBE0) else ((alpha shl 24) or 0x008C7050)
+                    val r = 0.3f + random.nextFloat() * 0.8f
+                    val alpha = if (isDark) (4 + random.nextInt(6)) else (5 + random.nextInt(10))
+                    speckPaint.color = if (isDark) ((alpha shl 24) or 0x003A2E20) else ((alpha shl 24) or 0x008C7050)
                     for (dx in floatArrayOf(-sizeF, 0f, sizeF)) {
                         for (dy in floatArrayOf(-sizeF, 0f, sizeF)) {
                             val nx = x + dx
@@ -238,9 +239,9 @@ fun PdfViewport(
             }
 
             // Calculate precise physical pixel dimensions based on display density and zoom level
-            val effectiveZoom = if (isZoomed) state.zoom.coerceIn(1.0f, 3.5f) else 1.0f
-            val targetWidth = (baseBounds.width * density * effectiveZoom).toInt().coerceIn(1200, 3840)
-            val targetHeight = (baseBounds.height * density * effectiveZoom).toInt().coerceIn(1600, 4320)
+            val effectiveZoom = if (isZoomed) state.zoom.coerceIn(1.0f, 4.0f) else 1.0f
+            val targetWidth = (baseBounds.width * density * effectiveZoom * 1.35f).toInt().coerceIn(1800, 4800)
+            val targetHeight = (baseBounds.height * density * effectiveZoom * 1.35f).toInt().coerceIn(2400, 6400)
 
             val bmp = onRenderPage(targetWidth, targetHeight)
             if (bmp != null) {

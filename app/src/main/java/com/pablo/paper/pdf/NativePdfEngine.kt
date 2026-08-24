@@ -31,8 +31,8 @@ class NativePdfEngine(
     private var reusableRegionBitmap: Bitmap? = null
 
     companion object {
-        private const val MAX_RENDER_WIDTH = 3840
-        private const val MAX_RENDER_HEIGHT = 4320
+        private const val MAX_RENDER_WIDTH = 5120
+        private const val MAX_RENDER_HEIGHT = 6800
     }
 
     override suspend fun open(uri: Uri): Boolean = withContext(Dispatchers.IO) {

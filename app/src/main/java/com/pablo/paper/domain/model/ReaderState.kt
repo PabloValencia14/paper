@@ -59,8 +59,8 @@ data class ReaderState(
     val documentNotes: String = "",
     val assistantMessages: List<AssistantMessage> = emptyList(),
     val isAssistantLoading: Boolean = false,
-    val aiProvider: com.pablo.paper.ai.AiProvider = com.pablo.paper.ai.AiProvider.GOOGLE_GEMINI,
-    val selectedAiModel: String = "gemini-2.0-flash",
+    val aiProvider: com.pablo.paper.ai.AiProvider = com.pablo.paper.ai.AiProvider.OPENROUTER,
+    val selectedAiModel: String = com.pablo.paper.ai.OpenRouterModels.DEFAULT_MODEL,
     val openRouterApiKey: String = "",
     val isApiKeyDialogOpen: Boolean = false,
     val isSelectTextMode: Boolean = false,
@@ -83,10 +83,23 @@ data class ReaderState(
     val isPdfSplitDialogOpen: Boolean = false,
     val lassoSelectedAnnotationIds: Set<String> = emptySet(),
     val lassoSelectionBounds: androidx.compose.ui.geometry.Rect? = null,
+    val isStudyMaskEnabled: Boolean = false,
+    val revealedMaskIds: Set<String> = emptySet(),
+    val isDigitalRulerVisible: Boolean = false,
+    val isFlashcardModalOpen: Boolean = false,
+    val flashcards: List<com.pablo.paper.ui.reader.FlashcardItem> = emptyList(),
+    val quizzes: List<com.pablo.paper.ui.reader.QuizQuestion> = emptyList(),
+    val isStudyGenerating: Boolean = false,
+    val eraserMode: EraserMode = EraserMode.STROKE,
     val exportStatusMessage: String? = null,
     val errorMessage: String? = null,
     val isLoading: Boolean = false
 )
+
+enum class EraserMode {
+    STROKE,
+    PRECISION
+}
 
 enum class ThumbnailsFilter {
     ALL,
@@ -175,7 +188,7 @@ sealed interface ReaderAction {
     data class RecolorLassoSelection(val color: Long) : ReaderAction
     data object DuplicateLassoSelection : ReaderAction
     data object DeleteLassoSelection : ReaderAction
-    data class MoveAnnotation(val annotationId: String, val newPoint: InkPoint) : ReaderAction
+    data class MoveAnnotation(val annotationId: String, val newPoint: InkPoint, val pageIndex: Int? = null) : ReaderAction
     data object OpenSignatureDialog : ReaderAction
     data object CloseSignatureDialog : ReaderAction
     data class ConfirmSignature(val strokes: List<List<InkPoint>>) : ReaderAction
@@ -217,5 +230,11 @@ sealed interface ReaderAction {
     data object ResetZoomPan : ReaderAction
     data object OnEdgeLeftTapped : ReaderAction
     data object OnEdgeRightTapped : ReaderAction
+    data object ToggleStudyMask : ReaderAction
+    data class ToggleMaskItem(val annotationId: String) : ReaderAction
+    data object ToggleDigitalRuler : ReaderAction
+    data object ToggleFlashcardModal : ReaderAction
+    data class GenerateStudyContent(val isQuiz: Boolean) : ReaderAction
+    data class SelectEraserMode(val mode: EraserMode) : ReaderAction
     data object CloseDocument : ReaderAction
 }

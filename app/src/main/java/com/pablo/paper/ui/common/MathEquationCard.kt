@@ -264,9 +264,9 @@ private fun buildKaTeXHtml(latex: String, isDark: Boolean): String {
         .removePrefix("$$").removeSuffix("$$")
         .removePrefix("\\[").removeSuffix("\\]")
         .trim()
-        .replace("\\", "\\\\")
-        .replace("\"", "\\\"")
-        .replace("\n", " ")
+        .replace("&", "&amp;")
+        .replace("<", "&lt;")
+        .replace(">", "&gt;")
 
     val textColor = if (isDark) "#F8FAFC" else "#0F172A"
 
@@ -303,15 +303,17 @@ private fun buildKaTeXHtml(latex: String, isDark: Boolean): String {
           </style>
         </head>
         <body>
+          <div id="raw-latex" style="display:none;">$cleanLatex</div>
           <div id="katex-target"></div>
           <script>
             try {
-              katex.render("$cleanLatex", document.getElementById("katex-target"), {
+              var raw = document.getElementById("raw-latex").textContent;
+              katex.render(raw, document.getElementById("katex-target"), {
                 displayMode: true,
                 throwOnError: false
               });
             } catch (e) {
-              document.getElementById("katex-target").innerText = "$cleanLatex";
+              document.getElementById("katex-target").innerText = document.getElementById("raw-latex").textContent;
             }
           </script>
         </body>

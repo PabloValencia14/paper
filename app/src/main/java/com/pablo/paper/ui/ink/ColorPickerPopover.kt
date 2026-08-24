@@ -18,41 +18,42 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.shadow
-import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Popup
 import androidx.compose.ui.window.PopupProperties
-import com.pablo.paper.domain.model.ColorPalette
 import com.pablo.paper.domain.model.InkTool
-import com.pablo.paper.ui.theme.BorderSubtle
-import com.pablo.paper.ui.theme.SurfaceToolbar
+import com.pablo.paper.ui.common.LiquidGlassSurface
+import com.pablo.paper.ui.theme.AccentBlue
 import com.pablo.paper.ui.theme.TextPrimary
-import com.pablo.paper.ui.theme.ToolbarShape
+import com.pablo.paper.ui.theme.TextPrimaryDark
+import com.pablo.paper.ui.theme.TextSecondary
+import com.pablo.paper.ui.theme.TextSecondaryDark
 
 @Composable
 fun ColorPickerPopover(
     tool: InkTool,
     selectedColor: Long,
     recentColors: List<Long>,
+    isDarkMode: Boolean = false,
     onColorSelected: (Long) -> Unit,
     onDismissRequest: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val isHighlighter = tool == InkTool.HIGHLIGHTER || tool == InkTool.TEXT_HIGHLIGHT
+    val textPrimary = if (isDarkMode) TextPrimaryDark else TextPrimary
+    val textSecondary = if (isDarkMode) TextSecondaryDark else TextSecondary
 
     val primaryPalette = if (isHighlighter) {
         listOf(
@@ -87,7 +88,6 @@ fun ColorPickerPopover(
         android.graphics.Color.RGBToHSV(r, g, b, hsv)
 
         if (hsv[1] < 0.1f && hsv[2] < 0.2f) {
-            // Grayscale / Black shades
             listOf(0xFFD1D1D6, 0xFF8E8E93, 0xFF48484A, 0xFF000000)
         } else {
             val shade1 = FloatArray(3).apply { this[0] = hsv[0]; this[1] = (hsv[1] * 0.35f).coerceIn(0.15f, 1f); this[2] = 0.98f }
@@ -106,13 +106,14 @@ fun ColorPickerPopover(
 
     Popup(
         alignment = Alignment.TopCenter,
-        offset = androidx.compose.ui.unit.IntOffset(0, 150),
+        offset = IntOffset(0, 150),
         onDismissRequest = onDismissRequest,
         properties = PopupProperties(focusable = true, dismissOnClickOutside = true)
     ) {
-        com.pablo.paper.ui.common.LiquidGlassSurface(
+        LiquidGlassSurface(
             modifier = modifier.width(360.dp),
             shape = RoundedCornerShape(20.dp),
+            isDarkMode = isDarkMode,
             elevation = 16.dp
         ) {
             Column(
@@ -121,9 +122,9 @@ fun ColorPickerPopover(
             ) {
                 // Header: Tool name
                 Text(
-                    text = tool.displayName,
+                    text = "Paleta de Color · ${tool.displayName}",
                     style = MaterialTheme.typography.titleSmall.copy(
-                        color = TextPrimary,
+                        color = textPrimary,
                         fontWeight = FontWeight.SemiBold,
                         fontSize = 15.sp
                     )
@@ -138,7 +139,7 @@ fun ColorPickerPopover(
                         .fillMaxWidth()
                         .height(44.dp)
                         .clip(RoundedCornerShape(8.dp))
-                        .background(Color(0xFFF2F2F7)),
+                        .background(if (isDarkMode) Color(0xFF1E293B) else Color(0xFFF2F2F7)),
                     contentAlignment = Alignment.Center
                 ) {
                     Canvas(modifier = Modifier.fillMaxWidth(0.85f).height(20.dp)) {
@@ -170,6 +171,7 @@ fun ColorPickerPopover(
                         ColorDot(
                             color = Color(colorVal),
                             isSelected = isSelected,
+                            isDarkMode = isDarkMode,
                             onClick = { onColorSelected(colorVal) }
                         )
                     }
@@ -182,7 +184,7 @@ fun ColorPickerPopover(
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(1.dp)
-                        .background(BorderSubtle)
+                        .background(if (isDarkMode) Color(0x33FFFFFF) else Color(0x22000000))
                 )
 
                 Spacer(modifier = Modifier.height(16.dp))
@@ -198,6 +200,7 @@ fun ColorPickerPopover(
                         ColorDot(
                             color = Color(colorVal),
                             isSelected = isSelected,
+                            isDarkMode = isDarkMode,
                             onClick = { onColorSelected(colorVal) }
                         )
                     }
@@ -211,6 +214,7 @@ fun ColorPickerPopover(
 fun ColorDot(
     color: Color,
     isSelected: Boolean,
+    isDarkMode: Boolean = false,
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -225,7 +229,7 @@ fun ColorDot(
                 modifier = Modifier
                     .size(32.dp)
                     .clip(CircleShape)
-                    .border(2.dp, Color(0xFF1C1C1E), CircleShape)
+                    .border(2.dp, if (isDarkMode) Color.White else Color(0xFF1C1C1E), CircleShape)
             )
         }
         Box(
@@ -233,7 +237,7 @@ fun ColorDot(
                 .size(if (isSelected) 22.dp else 26.dp)
                 .clip(CircleShape)
                 .background(color)
-                .border(1.dp, Color(0x22000000), CircleShape)
+                .border(1.dp, if (isDarkMode) Color(0x44FFFFFF) else Color(0x22000000), CircleShape)
         )
     }
 }

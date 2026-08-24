@@ -288,7 +288,7 @@ fun MarkdownPanel(
                         modifier = Modifier.align(Alignment.Center)
                     )
                 } else {
-                    MarkdownViewer(
+                    com.pablo.paper.ui.common.MarkdownContent(
                         markdown = notesText,
                         modifier = Modifier.fillMaxSize()
                     )

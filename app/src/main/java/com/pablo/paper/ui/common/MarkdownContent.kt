@@ -7,6 +7,7 @@ import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -18,6 +19,8 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.ContentCopy
@@ -36,6 +39,7 @@ import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -167,6 +171,14 @@ fun MarkdownContent(
                         )
                     }
                 }
+                is MarkdownBlock.Table -> {
+                    MarkdownTableCard(
+                        table = block,
+                        textColor = textColor,
+                        isDarkMode = isDarkMode,
+                        modifier = Modifier.padding(vertical = 4.dp)
+                    )
+                }
                 is MarkdownBlock.MermaidDiagram -> {
                     MermaidDiagramCard(
                         mermaidCode = block.code,
@@ -258,6 +270,115 @@ fun MarkdownContent(
     }
 }
 
+@Composable
+fun MarkdownTableCard(
+    table: MarkdownBlock.Table,
+    textColor: Color,
+    isDarkMode: Boolean,
+    modifier: Modifier = Modifier
+) {
+    val scrollState = rememberScrollState()
+    val borderColor = if (isDarkMode) Color(0xFF2E384D) else Color(0xFFE2E8F0)
+    val headerBg = if (isDarkMode) Color(0xFF1E2433) else Color(0xFFEDF2F7)
+    val altRowBg = if (isDarkMode) Color(0x0AFFFFFF) else Color(0x05000000)
+
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(10.dp))
+            .background(if (isDarkMode) Color(0xFF141721).copy(alpha = 0.8f) else Color(0xFFFAFAFA))
+            .border(1.dp, borderColor, RoundedCornerShape(10.dp))
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .horizontalScroll(scrollState)
+        ) {
+            // Header Row
+            Row(
+                modifier = Modifier
+                    .background(headerBg)
+                    .padding(horizontal = 4.dp, vertical = 6.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                table.headers.forEachIndexed { colIdx, headerText ->
+                    val align = table.alignments.getOrElse(colIdx) { TextAlign.Start }
+                    Box(
+                        modifier = Modifier
+                            .widthIn(min = 90.dp, max = 260.dp)
+                            .padding(horizontal = 10.dp, vertical = 4.dp),
+                        contentAlignment = when (align) {
+                            TextAlign.Center -> Alignment.Center
+                            TextAlign.End -> Alignment.CenterEnd
+                            else -> Alignment.CenterStart
+                        }
+                    ) {
+                        Text(
+                            text = renderInlineStyles(headerText, if (isDarkMode) Color(0xFF93C5FD) else AccentBlue),
+                            style = MaterialTheme.typography.bodySmall.copy(
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 12.5.sp
+                            ),
+                            textAlign = align
+                        )
+                    }
+                }
+            }
+
+            // Divider below header
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(1.dp)
+                    .background(borderColor)
+            )
+
+            // Data Rows
+            table.rows.forEachIndexed { rowIdx, rowCells ->
+                val isAlt = rowIdx % 2 == 1
+                Row(
+                    modifier = Modifier
+                        .background(if (isAlt) altRowBg else Color.Transparent)
+                        .padding(horizontal = 4.dp, vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    table.headers.indices.forEach { colIdx ->
+                        val cellText = rowCells.getOrElse(colIdx) { "" }
+                        val align = table.alignments.getOrElse(colIdx) { TextAlign.Start }
+                        Box(
+                            modifier = Modifier
+                                .widthIn(min = 90.dp, max = 260.dp)
+                                .padding(horizontal = 10.dp, vertical = 4.dp),
+                            contentAlignment = when (align) {
+                                TextAlign.Center -> Alignment.Center
+                                TextAlign.End -> Alignment.CenterEnd
+                                else -> Alignment.CenterStart
+                            }
+                        ) {
+                            Text(
+                                text = renderInlineStyles(cellText, textColor),
+                                style = MaterialTheme.typography.bodySmall.copy(
+                                    fontSize = 12.sp,
+                                    lineHeight = 16.sp
+                                ),
+                                textAlign = align
+                            )
+                        }
+                    }
+                }
+                if (rowIdx < table.rows.size - 1) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(0.5.dp)
+                            .background(borderColor.copy(alpha = 0.5f))
+                    )
+                }
+            }
+        }
+    }
+}
+
 sealed interface MarkdownBlock {
     data class Header(val level: Int, val text: String) : MarkdownBlock
     data class Paragraph(val text: String) : MarkdownBlock
@@ -267,12 +388,50 @@ sealed interface MarkdownBlock {
     data class CodeBlock(val language: String, val code: String) : MarkdownBlock
     data class MermaidDiagram(val code: String) : MarkdownBlock
     data class MathEquation(val formula: String) : MarkdownBlock
+    data class Table(
+        val headers: List<String>,
+        val alignments: List<TextAlign>,
+        val rows: List<List<String>>
+    ) : MarkdownBlock
     data object Divider : MarkdownBlock
+}
+
+private fun isTableSeparatorLine(line: String): Boolean {
+    val clean = line.trim()
+    if (!clean.contains("-")) return false
+    val parts = clean.split('|').map { it.trim() }.filter { it.isNotEmpty() }
+    if (parts.isEmpty()) return false
+    return parts.all { col ->
+        col.matches(Regex("^:?-+:?$"))
+    }
+}
+
+private fun parseTableRow(line: String): List<String> {
+    var raw = line.trim()
+    if (raw.startsWith("|")) raw = raw.substring(1)
+    if (raw.endsWith("|")) raw = raw.substring(0, raw.length - 1)
+    return raw.split('|').map { it.trim() }
+}
+
+private fun parseTableAlignments(separatorLine: String): List<TextAlign> {
+    val cols = parseTableRow(separatorLine)
+    return cols.map { col ->
+        val trimmed = col.trim()
+        val startsWithColon = trimmed.startsWith(":")
+        val endsWithColon = trimmed.endsWith(":")
+        when {
+            startsWithColon && endsWithColon -> TextAlign.Center
+            endsWithColon -> TextAlign.End
+            else -> TextAlign.Start
+        }
+    }
 }
 
 private fun parseMarkdownBlocks(markdown: String): List<MarkdownBlock> {
     val lines = markdown.lines()
     val blocks = mutableListOf<MarkdownBlock>()
+    var i = 0
+
     var inCodeBlock = false
     var codeLang = ""
     val codeBuilder = StringBuilder()
@@ -280,10 +439,11 @@ private fun parseMarkdownBlocks(markdown: String): List<MarkdownBlock> {
     var inMathBlock = false
     val mathBuilder = StringBuilder()
 
-    for (rawLine in lines) {
+    while (i < lines.size) {
+        val rawLine = lines[i]
         val trimmed = rawLine.trim()
 
-        // Handle ``` code blocks
+        // 1. Code blocks (```)
         if (trimmed.startsWith("```")) {
             if (inCodeBlock) {
                 val fullCode = codeBuilder.toString().trimEnd()
@@ -305,45 +465,64 @@ private fun parseMarkdownBlocks(markdown: String): List<MarkdownBlock> {
                 inCodeBlock = true
                 codeLang = trimmed.removePrefix("```").trim()
             }
+            i++
             continue
         }
 
         if (inCodeBlock) {
             if (codeBuilder.isNotEmpty()) codeBuilder.append("\n")
             codeBuilder.append(rawLine)
+            i++
             continue
         }
 
-        // Handle $$ math blocks
+        // 2. Display LaTeX Math Blocks ($$, \[, \begin{...})
         if (trimmed.startsWith("$$")) {
             if (trimmed.endsWith("$$") && trimmed.length > 2) {
-                // Single line $$ ... $$
                 val formula = trimmed.removePrefix("$$").removeSuffix("$$").trim()
                 if (formula.isNotEmpty()) {
                     blocks.add(MarkdownBlock.MathEquation(formula))
                 }
+                i++
                 continue
             } else if (inMathBlock) {
-                // Closing multiline $$
                 val formula = mathBuilder.toString().trim()
                 if (formula.isNotEmpty()) {
                     blocks.add(MarkdownBlock.MathEquation(formula))
                 }
                 mathBuilder.clear()
                 inMathBlock = false
+                i++
                 continue
             } else {
-                // Opening multiline $$
                 inMathBlock = true
                 val rest = trimmed.removePrefix("$$").trim()
                 if (rest.isNotEmpty()) mathBuilder.append(rest)
+                i++
+                continue
+            }
+        }
+
+        if (trimmed.startsWith("\\[")) {
+            if (trimmed.endsWith("\\]") && trimmed.length > 3) {
+                val formula = trimmed.removePrefix("\\[").removeSuffix("\\]").trim()
+                if (formula.isNotEmpty()) {
+                    blocks.add(MarkdownBlock.MathEquation(formula))
+                }
+                i++
+                continue
+            } else {
+                inMathBlock = true
+                val rest = trimmed.removePrefix("\\[").trim()
+                if (rest.isNotEmpty()) mathBuilder.append(rest)
+                i++
                 continue
             }
         }
 
         if (inMathBlock) {
-            if (trimmed.endsWith("$$")) {
-                val lastPart = trimmed.removeSuffix("$$").trim()
+            if (trimmed.endsWith("$$") || trimmed.endsWith("\\]")) {
+                val lastPart = trimmed.removeSuffix("$$").removeSuffix("\\]").trim()
                 if (lastPart.isNotEmpty()) {
                     if (mathBuilder.isNotEmpty()) mathBuilder.append("\n")
                     mathBuilder.append(lastPart)
@@ -358,13 +537,52 @@ private fun parseMarkdownBlocks(markdown: String): List<MarkdownBlock> {
                 if (mathBuilder.isNotEmpty()) mathBuilder.append("\n")
                 mathBuilder.append(rawLine)
             }
+            i++
+            continue
+        }
+
+        if (trimmed.startsWith("\\begin{equation}") || trimmed.startsWith("\\begin{align}") || trimmed.startsWith("\\begin{gather}") || trimmed.startsWith("\\begin{matrix}") || trimmed.startsWith("\\begin{pmatrix}") || trimmed.startsWith("\\begin{bmatrix}")) {
+            val formulaBuilder = StringBuilder(trimmed)
+            var j = i + 1
+            var closed = trimmed.contains("\\end{")
+            while (j < lines.size && !closed) {
+                val nextL = lines[j].trim()
+                formulaBuilder.append("\n").append(lines[j])
+                if (nextL.contains("\\end{")) {
+                    closed = true
+                }
+                j++
+            }
+            blocks.add(MarkdownBlock.MathEquation(formulaBuilder.toString().trim()))
+            i = j
             continue
         }
 
         if (trimmed.isEmpty()) {
+            i++
             continue
         }
 
+        // 3. Markdown Tables (| Col 1 | Col 2 | ... \n |---|---|...)
+        if (trimmed.contains("|") && i + 1 < lines.size && isTableSeparatorLine(lines[i + 1])) {
+            val headers = parseTableRow(trimmed)
+            val alignments = parseTableAlignments(lines[i + 1])
+            val rows = mutableListOf<List<String>>()
+            var j = i + 2
+            while (j < lines.size) {
+                val rowLine = lines[j].trim()
+                if (rowLine.isEmpty() || !rowLine.contains("|")) break
+                rows.add(parseTableRow(rowLine))
+                j++
+            }
+            if (headers.isNotEmpty()) {
+                blocks.add(MarkdownBlock.Table(headers, alignments, rows))
+            }
+            i = j
+            continue
+        }
+
+        // 4. Standard Markdown Elements
         when {
             trimmed.startsWith("##### ") -> {
                 blocks.add(MarkdownBlock.Header(5, trimmed.removePrefix("##### ").trim()))
@@ -400,6 +618,7 @@ private fun parseMarkdownBlocks(markdown: String): List<MarkdownBlock> {
                 blocks.add(MarkdownBlock.Paragraph(trimmed))
             }
         }
+        i++
     }
 
     if (inCodeBlock && codeBuilder.isNotEmpty()) {
@@ -437,7 +656,15 @@ fun renderInlineStyles(text: String, defaultColor: Color = TextPrimary): android
             val boldStart = text.indexOf("**", cursor)
             val italicStart = text.indexOf("*", cursor)
             val codeStart = text.indexOf("`", cursor)
-            val inlineMathStart = text.indexOf("$", cursor)
+            val inlineDollarStart = text.indexOf("$", cursor)
+            val inlineParenStart = text.indexOf("\\(", cursor)
+
+            val inlineMathStart = when {
+                inlineDollarStart != -1 && inlineParenStart != -1 -> minOf(inlineDollarStart, inlineParenStart)
+                inlineDollarStart != -1 -> inlineDollarStart
+                inlineParenStart != -1 -> inlineParenStart
+                else -> -1
+            }
 
             val nextSpecial = listOfNotNull(
                 if (boldStart != -1) boldStart else null,
@@ -468,23 +695,42 @@ fun renderInlineStyles(text: String, defaultColor: Color = TextPrimary): android
                         cursor = boldStart + 2
                     }
                 }
-                nextSpecial == inlineMathStart -> {
-                    val mathEnd = text.indexOf("$", inlineMathStart + 1)
+                nextSpecial == inlineDollarStart -> {
+                    val mathEnd = text.indexOf("$", inlineDollarStart + 1)
                     if (mathEnd != -1) {
                         withStyle(
                             SpanStyle(
                                 fontFamily = FontFamily.Serif,
                                 fontStyle = FontStyle.Italic,
                                 fontWeight = FontWeight.Medium,
-                                color = Color(0xFF34D399) // Emerald high-contrast math
+                                color = Color(0xFF10B981) // High-contrast emerald math
                             )
                         ) {
-                            append(" ${text.substring(inlineMathStart + 1, mathEnd)} ")
+                            append(" ${text.substring(inlineDollarStart + 1, mathEnd)} ")
                         }
                         cursor = mathEnd + 1
                     } else {
                         append("$")
-                        cursor = inlineMathStart + 1
+                        cursor = inlineDollarStart + 1
+                    }
+                }
+                nextSpecial == inlineParenStart -> {
+                    val mathEnd = text.indexOf("\\)", inlineParenStart + 2)
+                    if (mathEnd != -1) {
+                        withStyle(
+                            SpanStyle(
+                                fontFamily = FontFamily.Serif,
+                                fontStyle = FontStyle.Italic,
+                                fontWeight = FontWeight.Medium,
+                                color = Color(0xFF10B981)
+                            )
+                        ) {
+                            append(" ${text.substring(inlineParenStart + 2, mathEnd)} ")
+                        }
+                        cursor = mathEnd + 2
+                    } else {
+                        append("\\(")
+                        cursor = inlineParenStart + 2
                     }
                 }
                 nextSpecial == codeStart -> {

@@ -73,7 +73,7 @@ fun SettingsDialog(
     themeMode: AppThemeMode,
     stylusPrimaryAction: StylusButtonAction,
     stylusSecondaryAction: StylusButtonAction,
-    aiProvider: com.pablo.paper.ai.AiProvider = com.pablo.paper.ai.AiProvider.GOOGLE_GEMINI,
+    aiProvider: com.pablo.paper.ai.AiProvider = com.pablo.paper.ai.AiProvider.OPENROUTER,
     openRouterApiKey: String,
     selectedAiModel: String,
     isDarkMode: Boolean,
@@ -354,42 +354,7 @@ fun SettingsDialog(
                                 modifier = Modifier.padding(vertical = 4.dp)
                             ) {
                                 Text(
-                                    text = "Proveedor de Inteligencia Artificial:",
-                                    style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
-                                    color = textColor
-                                )
-
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
-                                ) {
-                                    com.pablo.paper.ai.AiProvider.entries.forEach { provider ->
-                                        val isSelected = aiProvider == provider
-                                        Surface(
-                                            shape = RoundedCornerShape(10.dp),
-                                            color = if (isSelected) AccentBlue.copy(alpha = 0.18f) else Color.Transparent,
-                                            border = BorderStroke(1.dp, if (isSelected) AccentBlue else borderColor),
-                                            modifier = Modifier
-                                                .weight(1f)
-                                                .clickable { onAiProviderChanged(provider) }
-                                        ) {
-                                            Text(
-                                                text = provider.shortName,
-                                                style = MaterialTheme.typography.labelMedium.copy(
-                                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                                                    fontSize = 11.5.sp
-                                                ),
-                                                color = if (isSelected) AccentBlue else textSecColor,
-                                                modifier = Modifier.padding(vertical = 7.dp, horizontal = 4.dp),
-                                                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-                                                maxLines = 1
-                                            )
-                                        }
-                                    }
-                                }
-
-                                Text(
-                                    text = "Clave API (${aiProvider.shortName}):",
+                                    text = "Clave API de OpenRouter:",
                                     style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
                                     color = textColor
                                 )

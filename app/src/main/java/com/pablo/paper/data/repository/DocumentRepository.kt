@@ -11,5 +11,6 @@ interface DocumentRepository {
     suspend fun importDocumentFromUri(uri: Uri): Document?
     suspend fun updateReadingProgress(documentId: String, page: Int, pageCount: Int)
     suspend fun deleteDocument(documentId: String)
-    suspend fun generateThumbnailIfNeeded(document: Document): String?
+    suspend fun syncDocumentsDirectory(): Int
+    suspend fun searchLibrary(query: String): List<Document>
 }

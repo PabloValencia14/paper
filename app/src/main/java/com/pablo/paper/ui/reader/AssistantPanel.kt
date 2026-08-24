@@ -96,8 +96,8 @@ fun AssistantPanel(
     pageCount: Int,
     messages: List<AssistantMessage>,
     isLoading: Boolean,
-    aiProvider: com.pablo.paper.ai.AiProvider = com.pablo.paper.ai.AiProvider.GOOGLE_GEMINI,
-    selectedModel: String,
+    aiProvider: com.pablo.paper.ai.AiProvider = com.pablo.paper.ai.AiProvider.OPENROUTER,
+    selectedModel: String = com.pablo.paper.ai.OpenRouterModels.DEFAULT_MODEL,
     apiKey: String,
     isApiKeyDialogOpen: Boolean,
     isDarkMode: Boolean = false,
@@ -218,37 +218,7 @@ fun AssistantPanel(
 
         Spacer(modifier = Modifier.height(8.dp))
 
-        // AI Provider Quick Selector Chips
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(6.dp)
-        ) {
-            com.pablo.paper.ai.AiProvider.entries.forEach { provider ->
-                val isSelected = aiProvider == provider
-                Surface(
-                    shape = RoundedCornerShape(8.dp),
-                    color = if (isSelected) AccentBlue.copy(alpha = 0.18f) else Color.Transparent,
-                    border = BorderStroke(1.dp, if (isSelected) AccentBlue else (if (isDarkMode) BorderSubtleDark else BorderSubtle)),
-                    modifier = Modifier
-                        .weight(1f)
-                        .clickable { onSelectAiProvider(provider) }
-                ) {
-                    Text(
-                        text = provider.shortName,
-                        style = MaterialTheme.typography.labelSmall.copy(
-                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                            fontSize = 10.5.sp
-                        ),
-                        color = if (isSelected) AccentBlue else (if (isDarkMode) TextSecondaryDark else TextSecondary),
-                        modifier = Modifier.padding(vertical = 5.dp, horizontal = 4.dp),
-                        textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-                        maxLines = 1
-                    )
-                }
-            }
-        }
 
-        Spacer(modifier = Modifier.height(8.dp))
 
         // Model Selector Dropdown Bar
         Box(
@@ -321,7 +291,7 @@ fun AssistantPanel(
                                         text = model.name,
                                         style = MaterialTheme.typography.bodyMedium.copy(
                                             fontWeight = if (model.id == selectedModel) FontWeight.Bold else FontWeight.Normal,
-                                            color = if (model.id == selectedModel) AccentBlue else TextPrimary
+                                            color = if (model.id == selectedModel) AccentBlue else MaterialTheme.colorScheme.onSurface
                                         )
                                     )
                                     if (model.id == selectedModel) {
@@ -337,7 +307,7 @@ fun AssistantPanel(
                                 Text(
                                     text = model.description,
                                     style = MaterialTheme.typography.bodySmall.copy(
-                                        color = TextSecondary,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                                         fontSize = 11.sp
                                     )
                                 )

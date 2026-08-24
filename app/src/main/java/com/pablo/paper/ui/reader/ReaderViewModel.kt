@@ -302,6 +302,14 @@ class ReaderViewModel(
 
             loadAnnotationsForPage(initialPage - 1)
             pdfEngine.prefetchPages(initialPage - 1, 2400, 3200)
+
+            // Background pre-extract full document text into memory cache for instant AI context
+            viewModelScope.launch(Dispatchers.IO) {
+                for (p in 0 until totalPages) {
+                    if (!isActive) break
+                    com.pablo.paper.ocr.PdfTextExtractor.getPageText(documentId, p, pdfEngine)
+                }
+            }
         }
     }
 
@@ -838,13 +846,26 @@ class ReaderViewModel(
             }
             is ReaderAction.MoveAnnotation -> {
                 viewModelScope.launch {
-                    val pageIdx = _state.value.currentPage - 1
-                    val currentAnnotations = annotationRepository.getAnnotationsForPage(documentId, pageIdx)
-                    val target = currentAnnotations.find { it.id == action.annotationId } ?: return@launch
-                    val updatedStroke = target.stroke?.copy(points = listOf(action.newPoint))
-                    val updatedAnnotation = target.copy(stroke = updatedStroke, updatedAt = System.currentTimeMillis())
-                    annotationRepository.saveAnnotation(updatedAnnotation)
-                    loadAnnotationsForPage(pageIdx)
+                    val pageIdx = action.pageIndex ?: (_state.value.currentPage - 1)
+                    var target = annotationRepository.getAnnotationsForPage(documentId, pageIdx).find { it.id == action.annotationId }
+                    var targetPage = pageIdx
+                    if (target == null) {
+                        for (p in 0 until _state.value.pageCount) {
+                            val found = annotationRepository.getAnnotationsForPage(documentId, p).find { it.id == action.annotationId }
+                            if (found != null) {
+                                target = found
+                                targetPage = p
+                                break
+                            }
+                        }
+                    }
+                    if (target != null) {
+                        val updatedStroke = target.stroke?.copy(points = listOf(action.newPoint))
+                        val updatedAnnotation = target.copy(stroke = updatedStroke, updatedAt = System.currentTimeMillis())
+                        annotationRepository.saveAnnotation(updatedAnnotation)
+                        inkController.updateAnnotationPosition(action.annotationId, action.newPoint)
+                        loadAnnotationsForPage(targetPage)
+                    }
                 }
             }
             is ReaderAction.TogglePageGrid -> {
@@ -1228,6 +1249,31 @@ class ReaderViewModel(
                     }
                 }
             }
+            is ReaderAction.ToggleStudyMask -> {
+                _state.update { it.copy(isStudyMaskEnabled = !it.isStudyMaskEnabled) }
+            }
+            is ReaderAction.ToggleMaskItem -> {
+                _state.update {
+                    val current = it.revealedMaskIds
+                    it.copy(revealedMaskIds = if (current.contains(action.annotationId)) current - action.annotationId else current + action.annotationId)
+                }
+            }
+            is ReaderAction.ToggleDigitalRuler -> {
+                _state.update { it.copy(isDigitalRulerVisible = !it.isDigitalRulerVisible) }
+            }
+            is ReaderAction.ToggleFlashcardModal -> {
+                val nextOpen = !_state.value.isFlashcardModalOpen
+                _state.update { it.copy(isFlashcardModalOpen = nextOpen) }
+                if (nextOpen && _state.value.flashcards.isEmpty() && _state.value.quizzes.isEmpty()) {
+                    generateStudyContent(isQuiz = false)
+                }
+            }
+            is ReaderAction.GenerateStudyContent -> {
+                generateStudyContent(action.isQuiz)
+            }
+            is ReaderAction.SelectEraserMode -> {
+                _state.update { it.copy(eraserMode = action.mode) }
+            }
             is ReaderAction.CloseDocument -> {
                 savePageAnnotations()
                 viewModelScope.launch {
@@ -1252,6 +1298,91 @@ class ReaderViewModel(
             } else {
                 sendAssistantMessage("¿Cuáles son las ideas principales de la página ${_state.value.currentPage}?")
             }
+        }
+    }
+
+    private fun generateStudyContent(isQuiz: Boolean) {
+        viewModelScope.launch(Dispatchers.IO) {
+            _state.update { it.copy(isStudyGenerating = true) }
+            val docName = _state.value.document?.name ?: "Documento PDF"
+            val totalPages = _state.value.pageCount
+
+            val fullDocBuilder = StringBuilder()
+            for (p in 1..totalPages.coerceAtMost(30)) {
+                val pageData = com.pablo.paper.ocr.PdfTextExtractor.getPageText(documentId, p - 1, pdfEngine)
+                if (pageData.fullText.isNotBlank()) {
+                    fullDocBuilder.append("--- PÁGINA $p ---\n${pageData.fullText}\n\n")
+                }
+            }
+
+            val prompt = if (isQuiz) {
+                """
+                Genera un cuestionario interactivo de 5 a 8 preguntas tipo test (4 opciones cada una) para evaluar y estudiar el siguiente documento '$docName'.
+                Devuelve EXCLUSIVAMENTE un bloque JSON válido sin texto adicional antes o después, con esta estructura exacta:
+                [
+                  {
+                    "question": "¿Cuál es el concepto central de...?",
+                    "options": ["Opción A", "Opción B", "Opción C", "Opción D"],
+                    "correctIndex": 0,
+                    "explanation": "Explicación detallada de por qué esta es la respuesta correcta.",
+                    "page": 1
+                  }
+                ]
+                
+                TEXTO DEL DOCUMENTO:
+                $fullDocBuilder
+                """.trimIndent()
+            } else {
+                """
+                Genera una baraja de 8 a 12 tarjetas de estudio (Flashcards) para memorizar y repasar los conceptos fundamentales de '$docName'.
+                Devuelve EXCLUSIVAMENTE un bloque JSON válido sin texto adicional antes o después, con esta estructura exacta:
+                [
+                  {
+                    "front": "Pregunta o término clave para memorizar",
+                    "back": "Definición clara, didáctica y completa",
+                    "page": 1
+                  }
+                ]
+                
+                TEXTO DEL DOCUMENTO:
+                $fullDocBuilder
+                """.trimIndent()
+            }
+
+            val result = openRouterClient.sendChat(
+                apiKey = _state.value.openRouterApiKey,
+                modelId = _state.value.selectedAiModel,
+                messages = listOf(AssistantMessage(role = MessageRole.USER, content = prompt)),
+                systemPrompt = "Eres un profesor y pedagogo universitario experto en generar material de estudio estructurado en formato JSON estricto.",
+                provider = _state.value.aiProvider
+            )
+
+            if (result.isSuccess) {
+                val jsonText = result.getOrNull() ?: ""
+                val cleanJson = jsonText.replace("```json", "").replace("```", "").trim()
+                try {
+                    val gson = com.google.gson.Gson()
+                    if (isQuiz) {
+                        val type = object : com.google.gson.reflect.TypeToken<List<com.pablo.paper.ui.reader.QuizQuestion>>() {}.type
+                        val list: List<com.pablo.paper.ui.reader.QuizQuestion> = gson.fromJson(cleanJson, type)
+                        if (list.isNotEmpty()) {
+                            _state.update { it.copy(quizzes = list, isStudyGenerating = false) }
+                            return@launch
+                        }
+                    } else {
+                        val type = object : com.google.gson.reflect.TypeToken<List<com.pablo.paper.ui.reader.FlashcardItem>>() {}.type
+                        val list: List<com.pablo.paper.ui.reader.FlashcardItem> = gson.fromJson(cleanJson, type)
+                        if (list.isNotEmpty()) {
+                            _state.update { it.copy(flashcards = list, isStudyGenerating = false) }
+                            return@launch
+                        }
+                    }
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
+            }
+
+            _state.update { it.copy(isStudyGenerating = false) }
         }
     }
 
@@ -1295,31 +1426,75 @@ class ReaderViewModel(
             val totalPages = _state.value.pageCount
             val outlineContext = getDocumentOutlineContext()
 
-            // Pre-fetch current page text
-            val currentPageData = com.pablo.paper.ocr.PdfTextExtractor.getPageText(documentId, currentPage - 1, pdfEngine)
-            val currentPageText = if (currentPageData.fullText.isNotBlank()) {
-                "--- TEXTO DE LA PÁGINA ACTUAL ($currentPage de $totalPages) ---\n${currentPageData.fullText}\n-----------------------------------"
-            } else {
-                "(Página $currentPage vacía o sin texto extraíble)"
+            // Build complete document text with the active reading page prominently indicated
+            val fullDocBuilder = StringBuilder()
+            fullDocBuilder.append("=== DOCUMENTO COMPLETO: \"$docName\" (Total: $totalPages páginas) ===\n")
+            fullDocBuilder.append("=== PÁGINA ACTIVA ACTUAL EN PANTALLA: PÁGINA $currentPage ===\n\n")
+
+            for (p in 1..totalPages) {
+                val pageData = com.pablo.paper.ocr.PdfTextExtractor.getPageText(documentId, p - 1, pdfEngine)
+                val pageText = pageData.fullText.trim()
+                val isCurrent = (p == currentPage)
+
+                if (isCurrent) {
+                    fullDocBuilder.append("=================================================================\n")
+                    fullDocBuilder.append("▶▶▶ PÁGINA $p DE $totalPages [PÁGINA ACTIVA ACTUAL DONDE ESTÁ EL LECTOR] ◀◀◀\n")
+                    fullDocBuilder.append("=================================================================\n")
+                } else {
+                    fullDocBuilder.append("--- PÁGINA $p DE $totalPages ---\n")
+                }
+
+                if (pageText.isNotEmpty()) {
+                    fullDocBuilder.append(pageText).append("\n\n")
+                } else {
+                    fullDocBuilder.append("(Página sin texto reconocible o con gráficos)\n\n")
+                }
+            }
+
+            // Also include user notes and highlights across the document if present
+            try {
+                val allAnnotations = annotationRepository.getAllAnnotationsForDocument(documentId)
+                if (allAnnotations.isNotEmpty()) {
+                    val notesBuilder = StringBuilder()
+                    notesBuilder.append("=== NOTAS Y ANOTACIONES DEL USUARIO EN ESTE DOCUMENTO ===\n")
+                    val groupedByPage = allAnnotations.groupBy { it.pageIndex }
+                    for ((pageIdx, annots) in groupedByPage.toSortedMap()) {
+                        val pageNum = pageIdx + 1
+                        val stickyNotes = annots.filter { it.type == com.pablo.paper.domain.model.AnnotationType.STICKY_NOTE }
+                        val textBoxes = annots.filter { it.type == com.pablo.paper.domain.model.AnnotationType.TEXT_BOX }
+                            stickyNotes.forEach { annot -> annot.textContent?.let { notesBuilder.append("  * [Nota adhesiva]: \"$it\"\n") } }
+                            textBoxes.forEach { annot -> annot.textContent?.let { notesBuilder.append("  * [Cuadro de texto]: \"$it\"\n") } }
+                    }
+                    if (notesBuilder.lines().size > 2) {
+                        fullDocBuilder.append(notesBuilder.toString()).append("\n\n")
+                    }
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
             }
 
             val systemPrompt = """
-                Eres un asistente y chatbot de lectura inteligente, conversacional y experto para la aplicación Paper.
-                El usuario está leyendo el documento: '$docName' (Página actual: $currentPage de $totalPages).
+                Eres un asistente de lectura e inteligencia artificial inteligente, conversacional, experto y riguroso para la aplicación Paper en tablet Xiaomi Pad.
+                El usuario está leyendo el documento: '$docName' (Total: $totalPages páginas).
+                La página activa en la que se encuentra el usuario en su pantalla en este instante es la PÁGINA $currentPage.
                 
                 $outlineContext
                 
-                $currentPageText
+                $fullDocBuilder
                 
-                INSTRUCCIONES CLAVE:
-                1. Tienes acceso completo a todas las páginas del documento.
-                2. Si el usuario te pregunta por cualquier otra sección o página del documento y necesitas consultar su texto exacto para responder con precisión, responde ÚNICAMENTE con la orden:
-                   [FETCH_PAGE: número_de_página]
-                   (Por ejemplo: [FETCH_PAGE: 3])
-                   El sistema te proporcionará inmediatamente el texto completo de esa página y podrás continuar con tu respuesta.
-                3. Responde siempre de forma clara, didáctica, precisa y en español, utilizando formato Markdown enriquecido.
-                4. DIAGRAMAS UML Y ESQUEMAS:
-                   Cuando el usuario solicite diagramas de secuencia, diagramas de clases, flujogramas, máquinas de estados, diagramas entidad-relación, mapas conceptuales o arquitecturas de software, genéralos SIEMPRE utilizando bloques de código ```mermaid ... ``` con sintaxis Mermaid 10 válida y limpia (sin caracteres especiales ni genéricos no escapados).
+                DIRECTRICES CLAVE:
+                1. CONTEXTO COMPLETO Y PÁGINA ACTIVA:
+                   - Tienes el texto ÍNTEGRO de todo el documento disponible arriba, estructurado página por página.
+                   - La PÁGINA ACTIVA ACTUAL donde el usuario se encuentra leyendo en su pantalla es la PÁGINA $currentPage.
+                   - Si el usuario hace preguntas genéricas o directas como "¿de qué trata esta página?", "resúmeme esto", "¿qué fórmulas hay aquí?", o "explica este concepto", contextualiza tu respuesta principalmente en la PÁGINA $currentPage (o su sección inmediata), relacionando libremente conceptos con cualquier otra parte del documento cuando aporte valor.
+                   - Si el usuario pregunta sobre cualquier otra sección del documento, resúmenes globales, comparativas entre temas o búsqueda de conceptos, utiliza toda la información del documento completo.
+                   - Cita siempre los números de página específicos al referenciar datos o ideas (ejemplo: "En la página 3 se detalla que...").
+                
+                2. FORMATO Y CLARIDAD:
+                   - Responde siempre de forma clara, didáctica, precisa y en español, utilizando formato Markdown enriquecido (negritas, listas, tablas).
+                
+                3. DIAGRAMAS UML Y ESQUEMAS:
+                   - Cuando el usuario solicite diagramas de secuencia, diagramas de clases, flujogramas, máquinas de estados, diagramas entidad-relación, mapas conceptuales o arquitecturas de software, genéralos SIEMPRE utilizando bloques de código ```mermaid ... ``` con sintaxis Mermaid 10 válida y limpia (sin caracteres especiales ni genéricos no escapados).
                    Ejemplos:
                    - Diagrama de clases:
                      ```mermaid
@@ -1342,10 +1517,11 @@ class ReaderViewModel(
                        C --> D[QC]
                        D --> E[Terminado]
                      ```
-                5. FÓRMULAS Y ECUACIONES MATEMÁTICAS:
-                   Cuando expliques conceptos matemáticos, físicos, algoritmos, estadísticas o cálculos, utiliza sintaxis LaTeX estándar:
-                   - Ecuaciones en bloque centradas: encerradas entre delimitadores de doble dólar (o bloques ```math / ```latex).
-                   - Variables y fórmulas en línea: encerradas entre delimitadores de dólar simple (ejemplo: ${'$'}f(x) = x^2${'$'}).
+                
+                4. FÓRMULAS Y ECUACIONES MATEMÁTICAS:
+                   - Cuando expliques conceptos matemáticos, físicos, algoritmos, estadísticas o cálculos, utiliza sintaxis LaTeX estándar:
+                     * Ecuaciones en bloque centradas: encerradas entre delimitadores de doble dólar (${'$'}${'$'} ... ${'$'}${'$'}).
+                     * Variables y fórmulas en línea: encerradas entre delimitadores de dólar simple (${'$'} ... ${'$'}).
                    El lector renderizará estas fórmulas con KaTeX con tipografía matemática de alta definición.
             """.trimIndent()
 

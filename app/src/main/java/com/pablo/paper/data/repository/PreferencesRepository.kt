@@ -81,7 +81,9 @@ class PreferencesRepository(private val context: Context) {
     }
 
     val openRouterApiKeyFlow: Flow<String> = context.dataStore.data.map { prefs ->
-        prefs[Keys.OPENROUTER_API_KEY] ?: ""
+        prefs[Keys.OPENROUTER_API_KEY]
+            ?: prefs[stringPreferencesKey("api_key_openrouter")]
+            ?: ""
     }
 
     val selectedAiModelFlow: Flow<String> = context.dataStore.data.map { prefs ->
@@ -90,13 +92,26 @@ class PreferencesRepository(private val context: Context) {
 
     val aiProviderFlow: Flow<com.pablo.paper.ai.AiProvider> = context.dataStore.data.map { prefs ->
         prefs[Keys.AI_PROVIDER]?.let {
-            try { enumValueOf<com.pablo.paper.ai.AiProvider>(it) } catch (e: Exception) { com.pablo.paper.ai.AiProvider.GOOGLE_GEMINI }
-        } ?: com.pablo.paper.ai.AiProvider.GOOGLE_GEMINI
+            try { enumValueOf<com.pablo.paper.ai.AiProvider>(it) } catch (e: Exception) { com.pablo.paper.ai.AiProvider.OPENROUTER }
+        } ?: com.pablo.paper.ai.AiProvider.OPENROUTER
     }
 
     suspend fun saveAiProvider(provider: com.pablo.paper.ai.AiProvider) {
         context.dataStore.edit { prefs ->
             prefs[Keys.AI_PROVIDER] = provider.name
+        }
+    }
+
+    fun getApiKeyForProviderFlow(provider: com.pablo.paper.ai.AiProvider): Flow<String> = context.dataStore.data.map { prefs ->
+        prefs[Keys.OPENROUTER_API_KEY]
+            ?: prefs[stringPreferencesKey("api_key_openrouter")]
+            ?: ""
+    }
+
+    suspend fun saveApiKeyForProvider(provider: com.pablo.paper.ai.AiProvider, apiKey: String) {
+        context.dataStore.edit { prefs ->
+            prefs[Keys.OPENROUTER_API_KEY] = apiKey
+            prefs[stringPreferencesKey("api_key_openrouter")] = apiKey
         }
     }
 
@@ -183,6 +198,7 @@ class PreferencesRepository(private val context: Context) {
     suspend fun saveOpenRouterApiKey(apiKey: String) {
         context.dataStore.edit { prefs ->
             prefs[Keys.OPENROUTER_API_KEY] = apiKey
+            prefs[stringPreferencesKey("api_key_openrouter")] = apiKey
         }
     }
 

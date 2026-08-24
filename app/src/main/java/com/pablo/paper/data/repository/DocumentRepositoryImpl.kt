@@ -116,27 +116,65 @@ class DocumentRepositoryImpl(
         documentDao.deleteDocument(documentId)
     }
 
-    override suspend fun generateThumbnailIfNeeded(document: Document): String? = withContext(Dispatchers.IO) {
-        if (!document.thumbnailPath.isNullOrEmpty() && File(document.thumbnailPath).exists()) {
-            return@withContext document.thumbnailPath
-        }
-
+    override suspend fun syncDocumentsDirectory(): Int = withContext(Dispatchers.IO) {
+        var importedCount = 0
         try {
-            val uri = Uri.parse(document.uri)
-            val pfd = context.contentResolver.openFileDescriptor(uri, "r") ?: return@withContext null
-            pfd.use { descriptor ->
-                val renderer = PdfRenderer(descriptor)
-                val path = renderFirstPageThumbnail(renderer, document.id)
-                renderer.close()
-                if (path != null) {
-                    documentDao.updateThumbnailPath(document.id, path)
+            val searchDirs = listOf(
+                android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_DOCUMENTS),
+                File("/sdcard/Documents"),
+                File("/storage/emulated/0/Documents")
+            ).filter { it.exists() && it.isDirectory }.distinctBy { it.canonicalPath }
+
+            val pdfFiles = mutableListOf<File>()
+            for (dir in searchDirs) {
+                dir.walkTopDown()
+                    .maxDepth(8)
+                    .filter { it.isFile && it.extension.equals("pdf", ignoreCase = true) }
+                    .forEach { pdfFiles.add(it) }
+            }
+
+            for (file in pdfFiles) {
+                val fileUri = Uri.fromFile(file).toString()
+                val existing = documentDao.getDocumentByUri(fileUri)
+                if (existing == null) {
+                    try {
+                        val pfd = ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_READ_ONLY)
+                        val (pageCount, thumbnailPath) = pfd.use { descriptor ->
+                            val renderer = PdfRenderer(descriptor)
+                            val count = renderer.pageCount
+                            val thumb = renderFirstPageThumbnail(renderer, fileUri)
+                            renderer.close()
+                            Pair(count, thumb)
+                        }
+
+                        val docId = UUID.randomUUID().toString()
+                        val entity = DocumentEntity(
+                            id = docId,
+                            uri = fileUri,
+                            name = file.name,
+                            pageCount = pageCount.coerceAtLeast(1),
+                            currentPage = 1,
+                            lastOpened = file.lastModified(),
+                            progress = if (pageCount > 0) 1f / pageCount else 0f,
+                            thumbnailPath = thumbnailPath
+                        )
+                        documentDao.insertDocument(entity)
+                        importedCount++
+                    } catch (e: Exception) {
+                        e.printStackTrace()
+                    }
                 }
-                path
             }
         } catch (e: Exception) {
             e.printStackTrace()
-            null
         }
+        importedCount
+    }
+
+    override suspend fun searchLibrary(query: String): List<Document> = withContext(Dispatchers.IO) {
+        if (query.isBlank()) return@withContext emptyList()
+        val allDocs = documentDao.getAllDocuments().map { it.toDomain() }
+        allDocs.filter { it.name.contains(query, ignoreCase = true) }
     }
 
     private fun renderFirstPageThumbnail(renderer: PdfRenderer, identifier: String): String? {

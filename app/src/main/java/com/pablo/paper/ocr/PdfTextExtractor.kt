@@ -156,7 +156,7 @@ object PdfTextExtractor {
         pageTextCache.evictAll()
     }
 
-    private const val MAX_CACHED_PAGES = 16
+    private const val MAX_CACHED_PAGES = 512
 }
 
 data class SearchMatch(

@@ -425,6 +425,22 @@ class InkController(
         onAnnotationUpdated(updated)
     }
 
+    fun updateAnnotationPosition(
+        annotationId: String,
+        newPoint: InkPoint,
+        onAnnotationUpdated: ((Annotation) -> Unit)? = null
+    ) {
+        val existing = _pageAnnotations.value.find { it.id == annotationId }
+        if (existing != null) {
+            val updated = existing.copy(
+                stroke = existing.stroke?.copy(points = listOf(newPoint)),
+                updatedAt = System.currentTimeMillis()
+            )
+            _pageAnnotations.update { list -> list.map { if (it.id == annotationId) updated else it } }
+            onAnnotationUpdated?.invoke(updated)
+        }
+    }
+
     fun addSignatureStrokes(
         documentId: String,
         pageIndex: Int,

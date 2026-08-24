@@ -29,6 +29,7 @@ import androidx.compose.ui.input.pointer.isTertiaryPressed
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.dp
 import com.pablo.paper.domain.model.Annotation
+import com.pablo.paper.domain.model.InkPoint
 import com.pablo.paper.domain.model.InkTool
 import com.pablo.paper.ink.InkController
 import com.pablo.paper.ink.StrokeSmoother
@@ -44,7 +45,7 @@ fun InkCanvas(
     pageSize: PageSize = PageSize(612, 792),
     documentId: String,
     pageIndex: Int,
-    annotations: List<Annotation>? = null,
+    annotations: List<Annotation> = emptyList(),
     isInkModeEnabled: Boolean,
     isSelectModeEnabled: Boolean = false,
     isContinuousScroll: Boolean = false,
@@ -75,7 +76,7 @@ fun InkCanvas(
     val liveStrokePoints by inkController.currentLiveStroke.collectAsState()
     val liveSnappedSegments by inkController.liveSnappedSegments.collectAsState()
     val storedAnnotations by inkController.pageAnnotations.collectAsState()
-    val annotations = annotations ?: storedAnnotations
+    val resolvedAnnotations = if (annotations.isNotEmpty()) annotations else storedAnnotations
     val activeTool by inkController.activeTool.collectAsState()
     val currentColor by inkController.currentColor.collectAsState()
     val strokeWidth by inkController.strokeWidth.collectAsState()
@@ -92,9 +93,11 @@ fun InkCanvas(
     val currentPanY by androidx.compose.runtime.rememberUpdatedState(panOffsetY)
 
     var previousToolBeforeHold by remember { androidx.compose.runtime.mutableStateOf<InkTool?>(null) }
+    var minimizedNoteIds by remember { androidx.compose.runtime.mutableStateOf(setOf<String>()) }
+    var liveMovingAnnotation by remember { androidx.compose.runtime.mutableStateOf<Pair<String, com.pablo.paper.domain.model.InkPoint>?>(null) }
 
     val inkGestureModifier = if (isInkModeEnabled || isSelectModeEnabled) {
-        Modifier.pointerInput(documentId, pageIndex, isInkModeEnabled, isSelectModeEnabled, isToolbarCollapsed, stylusPrimaryAction, stylusSecondaryAction) {
+        Modifier.pointerInput(documentId, pageIndex, isInkModeEnabled, isSelectModeEnabled, isToolbarCollapsed, stylusPrimaryAction, stylusSecondaryAction, resolvedAnnotations, minimizedNoteIds) {
             val canvasWidth = size.width.toFloat()
             val canvasHeight = size.height.toFloat()
 
@@ -103,86 +106,143 @@ fun InkCanvas(
                 if (!isToolbarCollapsed && down.position.y < 200f) {
                     return@awaitEachGesture
                 }
+
+                val baseWidthPt = if (pageSize.width > 0) pageSize.width.toFloat() else 612f
+                val scaleFactor = currentBounds.width / baseWidthPt
+
+                // 1. Universal Annotation Hit-Test (Works for both Finger and Stylus)
+                var hitAnnotation: Pair<Annotation, Boolean>? = null // (Annotation, isMinimizeClick)
+                for (ann in resolvedAnnotations.asReversed()) {
+                    val firstPt = ann.stroke?.points?.firstOrNull() ?: continue
+                    val noteScreenPos = transformer.pdfToScreen(firstPt, currentBounds)
+
+                    val isStickyNote = ann.type == com.pablo.paper.domain.model.AnnotationType.STICKY_NOTE || ann.stroke?.tool == InkTool.STICKY_NOTE
+                    val isTextBox = ann.type == com.pablo.paper.domain.model.AnnotationType.TEXT_BOX || ann.type == com.pablo.paper.domain.model.AnnotationType.TEXT_NOTE || ann.stroke?.tool == InkTool.TEXT_BOX
+
+                    if (isStickyNote) {
+                        val isMin = minimizedNoteIds.contains(ann.id) || ann.textContent.isNullOrBlank()
+                        if (isMin) {
+                            val hitRadius = 36f * scaleFactor
+                            val dx = down.position.x - noteScreenPos.x
+                            val dy = down.position.y - noteScreenPos.y
+                            if (dx * dx + dy * dy <= hitRadius * hitRadius) {
+                                hitAnnotation = Pair(ann, false)
+                                break
+                            }
+                        } else {
+                            val text = ann.textContent ?: ""
+                            val maxCardWidth = 240f * scaleFactor
+                            val longestLineLen = text.lines().maxOfOrNull { it.length } ?: 0
+                            val approxTextW = longestLineLen * (8.5f * scaleFactor)
+                            val cardW = (approxTextW + 36f * scaleFactor).coerceIn(100f * scaleFactor, maxCardWidth)
+                            val cardH = 140f * scaleFactor
+                            val cardRect = android.graphics.RectF(
+                                noteScreenPos.x,
+                                noteScreenPos.y,
+                                noteScreenPos.x + cardW,
+                                noteScreenPos.y + cardH
+                            )
+                            if (cardRect.contains(down.position.x, down.position.y)) {
+                                val isMinClick = down.position.x >= (cardRect.right - 38f * scaleFactor) &&
+                                                 down.position.y <= (cardRect.top + 38f * scaleFactor)
+                                hitAnnotation = Pair(ann, isMinClick)
+                                break
+                            }
+                        }
+                    } else if (isTextBox) {
+                        val boxW = 240f * scaleFactor
+                        val boxH = 100f * scaleFactor
+                        val boxRect = android.graphics.RectF(
+                            noteScreenPos.x,
+                            noteScreenPos.y,
+                            noteScreenPos.x + boxW,
+                            noteScreenPos.y + boxH
+                        )
+                        if (boxRect.contains(down.position.x, down.position.y)) {
+                            hitAnnotation = Pair(ann, false)
+                            break
+                        }
+                    }
+                }
+
+                if (hitAnnotation != null) {
+                    val (targetAnn, isMinClick) = hitAnnotation
+                    down.consume()
+                    if (isMinClick) {
+                        minimizedNoteIds = if (minimizedNoteIds.contains(targetAnn.id)) {
+                            minimizedNoteIds.filter { it != targetAnn.id }.toSet()
+                        } else {
+                            minimizedNoteIds + targetAnn.id
+                        }
+                        return@awaitEachGesture
+                    }
+
+                    var hasMoved = false
+                    val startPos = down.position
+                    val noteStartPdf = targetAnn.stroke?.points?.firstOrNull() ?: transformer.screenToPdf(down.position, currentBounds) ?: com.pablo.paper.domain.model.InkPoint(0.5f, 0.5f, 1f)
+                    var currentPdfPoint = noteStartPdf
+
+                    while (true) {
+                        val event = awaitPointerEvent()
+                        val activePointers = event.changes.filter { it.pressed }
+                        if (activePointers.isEmpty()) break
+                        val currentPos = activePointers.first().position
+                        val dist = (currentPos - startPos).getDistance()
+                        if (dist > 8f) {
+                            hasMoved = true
+                            val startPdf = transformer.screenToPdf(startPos, currentBounds)
+                            val currPdf = transformer.screenToPdf(currentPos, currentBounds)
+                            if (startPdf != null && currPdf != null) {
+                                val dx = currPdf.x - startPdf.x
+                                val dy = currPdf.y - startPdf.y
+                                val updatedPoint = com.pablo.paper.domain.model.InkPoint(
+                                    x = (noteStartPdf.x + dx).coerceIn(0f, 0.95f),
+                                    y = (noteStartPdf.y + dy).coerceIn(0f, 0.95f),
+                                    pressure = 1f
+                                )
+                                currentPdfPoint = updatedPoint
+                                liveMovingAnnotation = Pair(targetAnn.id, updatedPoint)
+                            }
+                        }
+                        event.changes.forEach { it.consume() }
+                    }
+
+                    liveMovingAnnotation = null
+                    if (hasMoved && currentPdfPoint != null) {
+                        onMoveAnnotation(targetAnn.id, currentPdfPoint)
+                    } else {
+                        if (targetAnn.type == com.pablo.paper.domain.model.AnnotationType.STICKY_NOTE) {
+                            if (minimizedNoteIds.contains(targetAnn.id)) {
+                                minimizedNoteIds = minimizedNoteIds.filter { it != targetAnn.id }.toSet()
+                            } else {
+                                onOpenStickyNote(targetAnn)
+                            }
+                        } else {
+                            onOpenTextBox(targetAnn)
+                        }
+                    }
+                    return@awaitEachGesture
+                }
+
                 val currentActiveTool = inkController.activeTool.value
                 val isHandTool = currentActiveTool == InkTool.HAND
                 val isStylusEraser = down.type == PointerType.Eraser
                 val hasStylus = down.type == PointerType.Stylus || isStylusEraser || down.type == PointerType.Mouse
+                if (hasStylus) {
+                    com.pablo.paper.ink.StylusInputDispatcher.notifyStylusActive()
+                }
+                val isStylusActive = hasStylus || com.pablo.paper.ink.StylusInputDispatcher.isStylusNearOrTouching()
                 val isSelectionGesture = isSelectModeEnabled || currentActiveTool == InkTool.SELECT_TEXT
                 val isStickyNoteGesture = currentActiveTool == InkTool.STICKY_NOTE
                 val isTextBoxGesture = currentActiveTool == InkTool.TEXT_BOX
                 val isStampGesture = currentActiveTool == InkTool.STAMP
                 
-                // In continuous scroll mode, finger touches belong entirely to LazyColumn scrolling
-                if (isContinuousScroll && !hasStylus && !isSelectionGesture && !isStickyNoteGesture && !isTextBoxGesture && !isStampGesture) {
-                    return@awaitEachGesture
-                }
-                
-                // ONLY optical stylus can draw when not in Hand tool.
-                // Fingers (PointerType.Touch) always navigate/pan/zoom and never paint.
+                // ONLY optical stylus (or explicit UI tool placing) can draw when not in Hand tool.
                 val isDrawingTouch = !isHandTool && (hasStylus || isSelectionGesture || isStickyNoteGesture || isTextBoxGesture || isStampGesture)
 
                 if (isDrawingTouch) {
-
                     val pdfPoint = transformer.screenToPdf(down.position, currentBounds)
                     if (pdfPoint != null) {
-                        // Check if tapped near an existing sticky note
-                        val hitNote = annotations.find { ann ->
-                            ann.type == com.pablo.paper.domain.model.AnnotationType.STICKY_NOTE &&
-                                    ann.stroke?.points?.firstOrNull()?.let { p ->
-                                        val dx = p.x - pdfPoint.x
-                                        val dy = p.y - pdfPoint.y
-                                        dx * dx + dy * dy < 0.0035f
-                                    } == true
-                        }
-
-                        // Check if tapped near an existing text box
-                        val hitTextBox = annotations.find { ann ->
-                            (ann.type == com.pablo.paper.domain.model.AnnotationType.TEXT_BOX || ann.type == com.pablo.paper.domain.model.AnnotationType.TEXT_NOTE) &&
-                                    ann.stroke?.points?.firstOrNull()?.let { p ->
-                                        val dx = p.x - pdfPoint.x
-                                        val dy = p.y - pdfPoint.y
-                                        dx * dx + dy * dy < 0.0035f
-                                    } == true
-                        }
-
-                        if (hitNote != null || hitTextBox != null) {
-                            val targetAnn = hitNote ?: hitTextBox!!
-                            val isTargetNote = hitNote != null
-                            down.consume()
-                            var hasMoved = false
-                            val startPos = down.position
-                            var lastPdfPoint = pdfPoint
-
-                            while (true) {
-                                val event = awaitPointerEvent()
-                                val activePointers = event.changes.filter { it.pressed }
-                                if (activePointers.isEmpty()) {
-                                    break
-                                }
-                                val currentPos = activePointers.first().position
-                                val dist = (currentPos - startPos).getDistance()
-                                if (dist > 14f) {
-                                    hasMoved = true
-                                    val updatedPoint = transformer.screenToPdf(currentPos, currentBounds)
-                                    if (updatedPoint != null) {
-                                        lastPdfPoint = updatedPoint
-                                    }
-                                }
-                                event.changes.forEach { it.consume() }
-                            }
-
-                            if (hasMoved && lastPdfPoint != null) {
-                                onMoveAnnotation(targetAnn.id, lastPdfPoint)
-                            } else {
-                                if (isTargetNote) {
-                                    onOpenStickyNote(targetAnn)
-                                } else {
-                                    onOpenTextBox(targetAnn)
-                                }
-                            }
-                            return@awaitEachGesture
-                        }
-
                         if (isStickyNoteGesture) {
                             onNewStickyNote(pdfPoint)
                             down.consume()
@@ -331,6 +391,11 @@ fun InkCanvas(
                             activePointers.first()
                         }
 
+                        // Consume and discard palm touch events while stylus is drawing
+                        if (hasStylus) {
+                            event.changes.filter { it.type == PointerType.Touch }.forEach { it.consume() }
+                        }
+
                         inkController.onTouchMove(
                             screenOffset = change.position,
                             pageBounds = currentBounds,
@@ -340,36 +405,57 @@ fun InkCanvas(
                         event.changes.forEach { it.consume() }
                     }
                 } else {
-                    // --- NAVIGATION / PAN / ZOOM / PAGE TURN (Finger or Stylus in HAND mode) ---
-                    var currentGestureZoom = currentZoom
-                    var currentGesturePanX = currentPanX
-                    var currentGesturePanY = currentPanY
+                    // --- FINGER TOUCH / NAVIGATION / PAN / ZOOM ---
 
-                    if (isContinuousScroll && !hasStylus) {
-                        // In continuous scroll mode, single finger touch must scroll the LazyColumn!
-                        // We do not consume single finger touches here so LazyColumn receives them natively.
+                    // 1. Proximity Palm Rejection: If the stylus is near or touching, discard finger touches
+                    // so the resting palm does not trigger unwanted movements while writing.
+                    if (isStylusActive) {
+                        down.consume()
+                        while (true) {
+                            val event = awaitPointerEvent()
+                            val activePointers = event.changes.filter { it.pressed }
+                            if (activePointers.isEmpty()) break
+
+                            // If user deliberately uses 2 distinct fingers with the other hand, allow pinch zoom/pan
+                            if (activePointers.size >= 2) {
+                                val centroid = event.calculateCentroid(useCurrent = true)
+                                val zoomChange = event.calculateZoom()
+                                val panChange = event.calculatePan()
+                                if (zoomChange != 1.0f || panChange != Offset.Zero) {
+                                    val newZoom = (currentZoom * zoomChange).coerceIn(1.0f, 5.0f)
+                                    val k = newZoom / currentZoom
+                                    val pageCenterX = (currentBounds.left + currentBounds.right) / 2f
+                                    val pageCenterY = (currentBounds.top + currentBounds.bottom) / 2f
+                                    val newPanX = if (newZoom <= 1.05f) 0f else (currentPanX + panChange.x + (k - 1f) * (pageCenterX - centroid.x))
+                                    val newPanY = if (newZoom <= 1.05f) 0f else (currentPanY + panChange.y + (k - 1f) * (pageCenterY - centroid.y))
+                                    onZoomPanChanged(newZoom, newPanX, newPanY)
+                                }
+                            }
+                            event.changes.forEach { it.consume() }
+                        }
+                        return@awaitEachGesture
+                    }
+
+                    // 2. Stylus is SEPARATED / AWAY: Palm rejection is INACTIVE.
+                    // In Continuous Scroll Mode, do not consume single finger touches so LazyColumn scrolls natively!
+                    if (isContinuousScroll) {
                         while (true) {
                             val event = awaitPointerEvent()
                             val activePointers = event.changes.filter { it.pressed }
                             if (activePointers.isEmpty()) break
                             if (activePointers.size >= 2) {
-                                // 2 fingers pinch to zoom
+                                // 2-finger pinch zoom in continuous scroll
                                 val centroid = event.calculateCentroid(useCurrent = true)
                                 val zoomChange = event.calculateZoom()
                                 val panChange = event.calculatePan()
                                 if (zoomChange != 1.0f || panChange != Offset.Zero) {
-                                    val newZoom = (currentGestureZoom * zoomChange).coerceIn(1.0f, 5.0f)
-                                    val k = newZoom / currentGestureZoom
+                                    val newZoom = (currentZoom * zoomChange).coerceIn(1.0f, 5.0f)
+                                    val k = newZoom / currentZoom
                                     val pageCenterX = (currentBounds.left + currentBounds.right) / 2f
                                     val pageCenterY = (currentBounds.top + currentBounds.bottom) / 2f
-                                    currentGestureZoom = newZoom
-                                    currentGesturePanX += panChange.x + (k - 1f) * (pageCenterX - centroid.x)
-                                    currentGesturePanY += panChange.y + (k - 1f) * (pageCenterY - centroid.y)
-                                    if (currentGestureZoom <= 1.05f) {
-                                        currentGesturePanX = 0f
-                                        currentGesturePanY = 0f
-                                    }
-                                    onZoomPanChanged(currentGestureZoom, currentGesturePanX, currentGesturePanY)
+                                    val newPanX = if (newZoom <= 1.05f) 0f else (currentPanX + panChange.x + (k - 1f) * (pageCenterX - centroid.x))
+                                    val newPanY = if (newZoom <= 1.05f) 0f else (currentPanY + panChange.y + (k - 1f) * (pageCenterY - centroid.y))
+                                    onZoomPanChanged(newZoom, newPanX, newPanY)
                                 }
                                 event.changes.forEach { it.consume() }
                             }
@@ -377,7 +463,12 @@ fun InkCanvas(
                         return@awaitEachGesture
                     }
 
+                    // 3. Single-Page / Two-Page Mode with Stylus Away:
+                    // Single finger pans when zoomed, swipes to change page when not zoomed, or quick-taps to navigate/toggle UI.
                     down.consume()
+                    var currentGestureZoom = currentZoom
+                    var currentGesturePanX = currentPanX
+                    var currentGesturePanY = currentPanY
                     val startDownPos = down.position
                     val downTimestamp = System.currentTimeMillis()
                     var totalPanX = 0f
@@ -452,7 +543,7 @@ fun InkCanvas(
                                 totalPanX += panChange.x
                                 totalPanY += panChange.y
 
-                                if (panChange != Offset.Zero) {
+                                if (currentGestureZoom > 1.05f && panChange != Offset.Zero) {
                                     currentGesturePanX += panChange.x
                                     currentGesturePanY += panChange.y
                                     onZoomPanChanged(currentGestureZoom, currentGesturePanX, currentGesturePanY)
@@ -472,9 +563,7 @@ fun InkCanvas(
                         // Check if tap was outside top toolbar area (toolbar is ~60dp + status bar)
                         if (startDownPos.y > 220f) {
                             val tapX = startDownPos.x
-                            val tapY = startDownPos.y
                             val width = if (canvasWidth > 0f) canvasWidth else (currentBounds.width + currentBounds.left * 2)
-                            val height = if (canvasHeight > 0f) canvasHeight else (currentBounds.height + currentBounds.top * 2)
 
                             // 1. Left 22% of screen -> Previous Page
                             if (tapX < width * 0.22f) {
@@ -484,11 +573,7 @@ fun InkCanvas(
                             else if (tapX > width * 0.78f) {
                                 onNextPage()
                             }
-                            // 3. Bottom 20% Center of screen -> Toggle Page Navigator Scrubber Bar
-                            else if (tapY > height * 0.80f) {
-                                onTogglePageNavigator()
-                            }
-                            // 4. Center of the Document / Screen -> Toggle Full-Screen Immersive UI
+                            // 3. Center of the Document / Screen -> Toggle Full-Screen Immersive UI
                             else {
                                 onToggleImmersiveMode()
                             }
@@ -510,9 +595,21 @@ fun InkCanvas(
         Modifier
     }
 
+    val hoverModifier = Modifier.pointerInput(Unit) {
+        awaitPointerEventScope {
+            while (true) {
+                val event = awaitPointerEvent(androidx.compose.ui.input.pointer.PointerEventPass.Initial)
+                if (event.changes.any { it.type == PointerType.Stylus || it.type == PointerType.Eraser }) {
+                    com.pablo.paper.ink.StylusInputDispatcher.notifyStylusActive()
+                }
+            }
+        }
+    }
+
     Canvas(
         modifier = modifier
             .fillMaxSize()
+            .then(hoverModifier)
             .then(inkGestureModifier)
     ) {
         if (pageBounds.width <= 0f || pageBounds.height <= 0f) return@Canvas
@@ -523,7 +620,7 @@ fun InkCanvas(
         // -------------------------------------------------------------
         // LAYER 1: HIGHLIGHTERS (Uniform composited layer - no dark overlapping buildup!)
         // -------------------------------------------------------------
-        val highlightAnnotations = annotations.filter {
+        val highlightAnnotations = resolvedAnnotations.filter {
             it.stroke?.tool == InkTool.HIGHLIGHTER || it.stroke?.tool == InkTool.TEXT_HIGHLIGHT
         }
         val isLiveHighlighting = liveStrokePoints.isNotEmpty() &&
@@ -621,7 +718,7 @@ fun InkCanvas(
         // -------------------------------------------------------------
         // LAYER 2: PEN, UNDERLINE, STRIKETHROUGH, WAVY (Crisp & Sharp on top)
         // -------------------------------------------------------------
-        val nonHighlightAnnotations = annotations.filter {
+        val nonHighlightAnnotations = resolvedAnnotations.filter {
             it.stroke?.tool != InkTool.HIGHLIGHTER && it.stroke?.tool != InkTool.TEXT_HIGHLIGHT
         }
         for (annotation in nonHighlightAnnotations) {
@@ -751,13 +848,17 @@ fun InkCanvas(
                 }
                 InkTool.STICKY_NOTE -> {
                     if (stroke.points.isNotEmpty()) {
-                        val center = transformer.pdfToScreen(stroke.points.first(), pageBounds)
+                        val isNoteMin = minimizedNoteIds.contains(annotation.id) || (annotation.textContent ?: "").isBlank()
+                        val livePos = if (liveMovingAnnotation?.first == annotation.id) {
+                            liveMovingAnnotation?.second?.let { transformer.pdfToScreen(it, pageBounds) }
+                        } else null
+                        val center = livePos ?: transformer.pdfToScreen(stroke.points.first(), pageBounds)
                         val text = annotation.textContent ?: ""
 
                         drawIntoCanvas { canvas ->
                             val native = canvas.nativeCanvas
 
-                            if (text.isNotBlank()) {
+                            if (!isNoteMin && text.isNotBlank()) {
                                 // Draw High-Contrast Sticky Note Card with Content Preview
                                 val textPaint = android.graphics.Paint().apply {
                                     color = 0xFF1E293B.toInt() // Dark slate for sharp readable contrast
@@ -806,7 +907,7 @@ fun InkCanvas(
                                     val w = textPaint.measureText(l)
                                     if (w > measuredMaxW) measuredMaxW = w
                                 }
-                                val cardWidth = (measuredMaxW + 28f * scaleFactor).coerceIn(80f * scaleFactor, maxCardWidth)
+                                val cardWidth = (measuredMaxW + 36f * scaleFactor).coerceIn(100f * scaleFactor, maxCardWidth)
                                 val lineHeight = textPaint.fontSpacing
                                 val headerHeight = 22f * scaleFactor
                                 val cardHeight = headerHeight + (lineHeight * displayLines.size) + 12f * scaleFactor
@@ -845,6 +946,17 @@ fun InkCanvas(
                                 native.drawCircle(cardRect.left + 12f * scaleFactor, cardRect.top + 12f * scaleFactor, 3.5f * scaleFactor, pinPaint)
                                 native.drawText("Nota", cardRect.left + 20f * scaleFactor, cardRect.top + 15f * scaleFactor, headerPaint)
 
+                                // Header Minimize Icon '-'
+                                val minIconPaint = android.graphics.Paint().apply {
+                                    color = 0xFF92400E.toInt()
+                                    this.strokeWidth = 2.2f * scaleFactor
+                                    style = android.graphics.Paint.Style.STROKE
+                                    isAntiAlias = true
+                                }
+                                val minX = cardRect.right - 14f * scaleFactor
+                                val minY = cardRect.top + 12f * scaleFactor
+                                native.drawLine(minX - 5f * scaleFactor, minY, minX + 5f * scaleFactor, minY, minIconPaint)
+
                                 // Note text lines
                                 var textY = cardRect.top + headerHeight + 8f * scaleFactor
                                 for (l in displayLines) {
@@ -852,11 +964,11 @@ fun InkCanvas(
                                     textY += lineHeight
                                 }
                             } else {
-                                // Compact Amber Glass Pin Badge for empty note
-                                val noteSize = 24f * scaleFactor
+                                // Compact Amber Glass Pin Badge for Minimized / Empty Note
+                                val badgeSize = 30f * scaleFactor
                                 val rect = android.graphics.RectF(
-                                    center.x - noteSize / 2f, center.y - noteSize / 2f,
-                                    center.x + noteSize / 2f, center.y + noteSize / 2f
+                                    center.x - badgeSize / 2f, center.y - badgeSize / 2f,
+                                    center.x + badgeSize / 2f, center.y + badgeSize / 2f
                                 )
                                 val bgPaint = android.graphics.Paint().apply {
                                     color = android.graphics.Color.argb(250, 255, 213, 79)
@@ -869,15 +981,39 @@ fun InkCanvas(
                                     style = android.graphics.Paint.Style.STROKE
                                     isAntiAlias = true
                                 }
-                                 native.drawRoundRect(rect, 6f * scaleFactor, 6f * scaleFactor, bgPaint)
-                                native.drawRoundRect(rect, 6f * scaleFactor, 6f * scaleFactor, borderPaint)
+                                val shadowPaint = android.graphics.Paint().apply {
+                                    color = android.graphics.Color.argb(50, 0, 0, 0)
+                                    style = android.graphics.Paint.Style.FILL
+                                    isAntiAlias = true
+                                }
+                                val shadowRect = android.graphics.RectF(
+                                    rect.left + 2f * scaleFactor, rect.top + 2f * scaleFactor,
+                                    rect.right + 2f * scaleFactor, rect.bottom + 2f * scaleFactor
+                                )
+                                native.drawRoundRect(shadowRect, 8f * scaleFactor, 8f * scaleFactor, shadowPaint)
+                                native.drawRoundRect(rect, 8f * scaleFactor, 8f * scaleFactor, bgPaint)
+                                native.drawRoundRect(rect, 8f * scaleFactor, 8f * scaleFactor, borderPaint)
+
+                                // Mini note lines inside badge
+                                val linePaint = android.graphics.Paint().apply {
+                                    color = 0xFF5D4037.toInt()
+                                    this.strokeWidth = 1.5f * scaleFactor
+                                    style = android.graphics.Paint.Style.STROKE
+                                    isAntiAlias = true
+                                }
+                                native.drawLine(rect.left + 7f * scaleFactor, rect.top + 9f * scaleFactor, rect.right - 7f * scaleFactor, rect.top + 9f * scaleFactor, linePaint)
+                                native.drawLine(rect.left + 7f * scaleFactor, rect.top + 15f * scaleFactor, rect.right - 7f * scaleFactor, rect.top + 15f * scaleFactor, linePaint)
+                                native.drawLine(rect.left + 7f * scaleFactor, rect.top + 21f * scaleFactor, rect.left + 15f * scaleFactor, rect.top + 21f * scaleFactor, linePaint)
                             }
                         }
                     }
                 }
                 InkTool.TEXT_BOX -> {
                     if (stroke.points.isNotEmpty()) {
-                        val center = transformer.pdfToScreen(stroke.points.first(), pageBounds)
+                        val livePos = if (liveMovingAnnotation?.first == annotation.id) {
+                            liveMovingAnnotation?.second?.let { transformer.pdfToScreen(it, pageBounds) }
+                        } else null
+                        val center = livePos ?: transformer.pdfToScreen(stroke.points.first(), pageBounds)
                         val text = annotation.textContent ?: ""
                         if (text.isNotEmpty()) {
                             drawIntoCanvas { canvas ->
