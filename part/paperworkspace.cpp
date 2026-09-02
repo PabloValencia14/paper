@@ -420,7 +420,7 @@ void PaperWorkspace::sendPrompt()
 
     m_conversation.append(userMessage);
     while (m_conversation.size() > maximumConversationMessages) {
-        m_conversation.removeFirst();
+        m_conversation.removeAt(0);
     }
     appendConversationMessage(i18n("Tú"), prompt);
     m_promptEdit->clear();
@@ -478,7 +478,7 @@ void PaperWorkspace::handleReply(QNetworkReply *reply)
                     assistantMessage.insert(QStringLiteral("content"), answer);
                     m_conversation.append(assistantMessage);
                     while (m_conversation.size() > maximumConversationMessages) {
-                        m_conversation.removeFirst();
+                        m_conversation.removeAt(0);
                     }
                 }
             }
