@@ -45,6 +45,9 @@ compose.desktop {
             description = "Paper - Advanced PDF Reader & Productivity Suite for Windows"
             vendor = "Pablo"
             windows {
+                // La instalación por usuario evita exigir elevación y respeta las políticas
+                // corporativas de Windows que bloquean instaladores per-machine.
+                perUserInstall = true
                 menuGroup = "Paper"
                 upgradeUuid = "6b75c88b-286a-4d37-84bc-877bf7394c92"
             }
