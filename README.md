@@ -13,7 +13,7 @@ La versión de Windows se ha reconstruido alrededor de un único motor PDFBox. L
 
 ### Usar el instalador
 
-El instalador generado para esta versión se encuentra en:
+Si solo quieres usar Paper, descarga `PaperDesktop-1.0.0.exe` desde la página de [Releases](https://github.com/PabloValencia14/paper/releases). Si has clonado el código y lo has compilado, el instalador generado para esta versión se encuentra en:
 
 ```text
 desktop/build/compose/binaries/main/exe/PaperDesktop-1.0.0.exe
