@@ -6,11 +6,13 @@ import java.awt.image.BufferedImage
 import java.util.LinkedHashMap
 
 class PdfBitmapCache(
-    private val maxMemoryBytes: Long = Runtime.getRuntime().maxMemory() / 4
+    private val maxMemoryBytes: Long = (Runtime.getRuntime().maxMemory() / 10)
+        .coerceIn(48L * 1024 * 1024, 160L * 1024 * 1024)
 ) {
     private val cache = object : LinkedHashMap<String, CachedBitmap>(64, 0.75f, true) {
         override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, CachedBitmap>?): Boolean {
-            return currentBytes > maxMemoryBytes
+            // Eviction is handled explicitly in put() so currentBytes stays exact.
+            return false
         }
     }
 

@@ -3,10 +3,6 @@ package com.pablo.paper.desktop.ui.dock
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.horizontalScroll
-import androidx.compose.foundation.hoverable
-import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.interaction.collectIsHoveredAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -22,35 +18,25 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.AutoAwesome
-import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.DeleteSweep
-import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Description
+import androidx.compose.material.icons.filled.EditNote
 import androidx.compose.material.icons.filled.Info
-import androidx.compose.material.icons.filled.Key
-import androidx.compose.material.icons.filled.Psychology
-import androidx.compose.material.icons.filled.Quiz
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.SmartToy
-import androidx.compose.material.icons.filled.Visibility
-import androidx.compose.material.icons.filled.VisibilityOff
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextFieldDefaults
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -61,646 +47,278 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
-import androidx.compose.ui.input.key.isCtrlPressed
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
-
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.PasswordVisualTransformation
-import androidx.compose.ui.text.input.VisualTransformation
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.pablo.paper.desktop.model.AiModelInfo
 import com.pablo.paper.desktop.model.MessageRole
 import com.pablo.paper.desktop.state.RightDockTab
 import com.pablo.paper.desktop.state.WorkspaceState
 import com.pablo.paper.desktop.ui.common.DesktopMarkdownContent
 
 @Composable
-fun DesktopRightDock(
-    state: WorkspaceState,
-    modifier: Modifier = Modifier
-) {
+fun DesktopRightDock(state: WorkspaceState, modifier: Modifier = Modifier) {
     Row(
         modifier = modifier
-            .width(380.dp)
+            .width(336.dp)
             .fillMaxHeight()
             .background(MaterialTheme.colorScheme.surface)
-            .border(width = 0.5.dp, color = MaterialTheme.colorScheme.outline.copy(alpha = 0.4f))
+            .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.45f))
     ) {
-        // Content Area
         Column(
-            modifier = Modifier
-                .weight(1f)
-                .fillMaxHeight()
-                .padding(10.dp)
+            modifier = Modifier.weight(1f).fillMaxHeight().padding(horizontal = 12.dp, vertical = 9.dp)
         ) {
-            // Header
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    Icon(
-                        imageVector = when (state.rightDockTab) {
-                            RightDockTab.AI_ASSISTANT -> Icons.Default.AutoAwesome
-                            RightDockTab.MARKDOWN_NOTES -> Icons.Default.Edit
-                            RightDockTab.FLASHCARDS -> Icons.Default.Quiz
-                            RightDockTab.METADATA -> Icons.Default.Info
-                        },
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(16.dp)
-                    )
-                    Text(
-                        text = state.rightDockTab.title,
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                }
-                IconButton(
-                    onClick = { state.isRightDockOpen = false },
-                    modifier = Modifier.size(24.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Close,
-                        contentDescription = "Cerrar dock",
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(14.dp)
-                    )
+            Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Text(state.rightDockTab.title, style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
+                IconButton(onClick = { state.isRightDockOpen = false }, modifier = Modifier.size(34.dp)) {
+                    Icon(Icons.Default.Close, contentDescription = "Cerrar panel", modifier = Modifier.size(16.dp))
                 }
             }
-            HorizontalDivider(
-                modifier = Modifier.padding(vertical = 8.dp),
-                color = MaterialTheme.colorScheme.outline.copy(alpha = 0.25f)
-            )
-
+            Box(modifier = Modifier.fillMaxWidth().height(1.dp).background(MaterialTheme.colorScheme.outline.copy(alpha = 0.5f)))
+            Spacer(Modifier.height(8.dp))
             when (state.rightDockTab) {
-                RightDockTab.AI_ASSISTANT -> {
-                    AiAssistantPane(state = state)
-                }
-                RightDockTab.MARKDOWN_NOTES -> {
-                    MarkdownNotesPane(state = state)
-                }
-                RightDockTab.FLASHCARDS -> {
-                    FlashcardsPane(state = state)
-                }
-                RightDockTab.METADATA -> {
-                    MetadataPane(state = state)
-                }
+                RightDockTab.AI_ASSISTANT -> AiAssistantPane(state)
+                RightDockTab.MARKDOWN_NOTES -> MarkdownNotesPane(state)
+                RightDockTab.METADATA -> MetadataPane(state)
             }
         }
-
-        // Vertical Tab Strip on the far right
         Column(
             modifier = Modifier
-                .width(44.dp)
+                .width(42.dp)
                 .fillMaxHeight()
-                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f))
-                .border(width = 0.5.dp, color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f))
-                .padding(vertical = 10.dp),
+                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.48f))
+                .padding(top = 8.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(8.dp)
+            verticalArrangement = Arrangement.spacedBy(5.dp)
         ) {
-            LeftDockIconButton(
-                icon = Icons.Default.AutoAwesome,
-                isSelected = state.rightDockTab == RightDockTab.AI_ASSISTANT,
-                tooltip = "Asistente IA",
-                onClick = { state.rightDockTab = RightDockTab.AI_ASSISTANT }
-            )
-            LeftDockIconButton(
-                icon = Icons.Default.Edit,
-                isSelected = state.rightDockTab == RightDockTab.MARKDOWN_NOTES,
-                tooltip = "Notas",
-                onClick = { state.rightDockTab = RightDockTab.MARKDOWN_NOTES }
-            )
-            LeftDockIconButton(
-                icon = Icons.Default.Quiz,
-                isSelected = state.rightDockTab == RightDockTab.FLASHCARDS,
-                tooltip = "Estudio",
-                onClick = { state.rightDockTab = RightDockTab.FLASHCARDS }
-            )
-            LeftDockIconButton(
-                icon = Icons.Default.Info,
-                isSelected = state.rightDockTab == RightDockTab.METADATA,
-                tooltip = "Propiedades",
-                onClick = { state.rightDockTab = RightDockTab.METADATA }
-            )
+            RightRailButton(Icons.Default.AutoAwesome, "Asistente", state.rightDockTab == RightDockTab.AI_ASSISTANT) { state.rightDockTab = RightDockTab.AI_ASSISTANT }
+            RightRailButton(Icons.Default.EditNote, "Notas", state.rightDockTab == RightDockTab.MARKDOWN_NOTES) { state.rightDockTab = RightDockTab.MARKDOWN_NOTES }
+            RightRailButton(Icons.Default.Info, "Información del documento", state.rightDockTab == RightDockTab.METADATA) { state.rightDockTab = RightDockTab.METADATA }
         }
     }
 }
 
 @Composable
-fun AiAssistantPane(state: WorkspaceState) {
-    var inputPrompt by remember { mutableStateOf("") }
-    var showModelMenu by remember { mutableStateOf(false) }
-    var showApiKeyPopover by remember { mutableStateOf(false) }
-    var showPassword by remember { mutableStateOf(false) }
-    val chatListState = rememberLazyListState()
+private fun RightRailButton(icon: androidx.compose.ui.graphics.vector.ImageVector, description: String, selected: Boolean, onClick: () -> Unit) {
+    IconButton(
+        onClick = onClick,
+        modifier = Modifier
+            .size(36.dp)
+            .clip(RoundedCornerShape(6.dp))
+            .background(if (selected) MaterialTheme.colorScheme.primary.copy(alpha = 0.15f) else Color.Transparent)
+    ) {
+        Icon(icon, contentDescription = description, modifier = Modifier.size(18.dp), tint = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant)
+    }
+}
+
+@Composable
+private fun AiAssistantPane(state: WorkspaceState) {
+    var prompt by remember { mutableStateOf("") }
+    var showModels by remember { mutableStateOf(false) }
+    val listState = rememberLazyListState()
 
     LaunchedEffect(state.assistantMessages.size) {
-        if (state.assistantMessages.isNotEmpty()) {
-            chatListState.animateScrollToItem(state.assistantMessages.size - 1)
-        }
+        if (state.assistantMessages.isNotEmpty()) listState.animateScrollToItem(state.assistantMessages.lastIndex)
     }
 
     Column(modifier = Modifier.fillMaxSize()) {
-        // Model Selector Bar with Free Tag Badges
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(8.dp))
-                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
-                .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.3f), RoundedCornerShape(8.dp))
-                .padding(horizontal = 8.dp, vertical = 4.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
+                .clip(RoundedCornerShape(6.dp))
+                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f))
+                .padding(start = 8.dp, end = 3.dp, top = 4.dp, bottom = 4.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
+            Icon(Icons.Default.SmartToy, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(16.dp))
+            Spacer(Modifier.width(6.dp))
             Box(modifier = Modifier.weight(1f)) {
-                val currentModel = state.availableModels.find { it.id == state.selectedModelId }
                 Row(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(4.dp))
-                        .clickable { showModelMenu = true }
-                        .padding(vertical = 4.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    modifier = Modifier.clickable { showModels = true }.padding(vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Icon(
-                        imageVector = Icons.Default.SmartToy,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(16.dp)
-                    )
                     Text(
-                        text = currentModel?.name ?: state.selectedModelId,
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurface,
+                        text = state.availableModels.firstOrNull { it.id == state.selectedModelId }?.name ?: state.selectedModelId,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.SemiBold,
                         maxLines = 1,
-                        modifier = Modifier.weight(1f, fill = false)
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f)
                     )
-                    if (currentModel?.isFree == true) {
-                        Box(
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(4.dp))
-                                .background(Color(0xFF10B981).copy(alpha = 0.15f))
-                                .padding(horizontal = 4.dp, vertical = 1.dp)
-                        ) {
-                            Text("GRATIS", fontSize = 9.sp, fontWeight = FontWeight.Black, color = Color(0xFF059669))
-                        }
-                    }
                 }
-
-                DropdownMenu(
-                    expanded = showModelMenu,
-                    onDismissRequest = { showModelMenu = false },
-                    modifier = Modifier
-                        .width(320.dp)
-                        .background(MaterialTheme.colorScheme.surface)
-                ) {
+                DropdownMenu(expanded = showModels, onDismissRequest = { showModels = false }, modifier = Modifier.width(278.dp)) {
                     state.availableModels.forEach { model ->
-                        val isPicked = model.id == state.selectedModelId
                         DropdownMenuItem(
                             text = {
-                                Column(modifier = Modifier.fillMaxWidth()) {
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        horizontalArrangement = Arrangement.SpaceBetween,
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        Text(
-                                            text = model.name,
-                                            fontWeight = if (isPicked) FontWeight.Bold else FontWeight.SemiBold,
-                                            fontSize = 12.sp,
-                                            color = if (isPicked) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
-                                        )
-                                        if (model.isFree) {
-                                            Box(
-                                                modifier = Modifier
-                                                    .clip(RoundedCornerShape(4.dp))
-                                                    .background(Color(0xFF10B981).copy(alpha = 0.15f))
-                                                    .padding(horizontal = 4.dp, vertical = 1.dp)
-                                            ) {
-                                                Text("FREE", fontSize = 9.sp, fontWeight = FontWeight.Bold, color = Color(0xFF059669))
-                                            }
-                                        }
-                                    }
-                                    Spacer(Modifier.height(2.dp))
-                                    Text(
-                                        text = model.description,
-                                        fontSize = 10.sp,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        maxLines = 2
-                                    )
+                                Column {
+                                    Text(model.name, fontSize = 12.sp, fontWeight = if (model.id == state.selectedModelId) FontWeight.Bold else FontWeight.Normal)
+                                    if (model.description.isNotBlank()) Text(model.description, fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2)
                                 }
                             },
-                            onClick = {
-                                state.selectedModelId = model.id
-                                showModelMenu = false
-                            }
+                            onClick = { state.selectedModelId = model.id; showModels = false }
                         )
                     }
                 }
             }
-
-            // API Key & Clear Actions
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                IconButton(
-                    onClick = { showApiKeyPopover = !showApiKeyPopover },
-                    modifier = Modifier.size(26.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Key,
-                        contentDescription = "Configurar API Key",
-                        tint = if (state.openRouterApiKey.isNotBlank()) Color(0xFF10B981) else Color.Gray,
-                        modifier = Modifier.size(15.dp)
-                    )
-                }
-                IconButton(
-                    onClick = { state.clearChat() },
-                    modifier = Modifier.size(26.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.DeleteSweep,
-                        contentDescription = "Limpiar conversación",
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(16.dp)
-                    )
-                }
+            IconButton(onClick = state::refreshAiModels, modifier = Modifier.size(32.dp)) {
+                Icon(Icons.Default.Refresh, contentDescription = "Actualizar modelos del proxy", modifier = Modifier.size(15.dp))
+            }
+            IconButton(onClick = state::clearChat, modifier = Modifier.size(32.dp)) {
+                Icon(Icons.Default.DeleteSweep, contentDescription = "Limpiar conversación", modifier = Modifier.size(16.dp))
             }
         }
-
-        // API Key Popover
-        if (showApiKeyPopover) {
-            Spacer(Modifier.height(6.dp))
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)),
-                shape = RoundedCornerShape(8.dp)
-            ) {
-                Column(modifier = Modifier.padding(8.dp)) {
-                    Text("Clave de API de OpenRouter:", fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                    Spacer(Modifier.height(4.dp))
-                    OutlinedTextField(
-                        value = state.openRouterApiKey,
-                        onValueChange = { state.openRouterApiKey = it },
-                        placeholder = { Text("sk-or-v1-...", fontSize = 11.sp) },
-                        visualTransformation = if (showPassword) VisualTransformation.None else PasswordVisualTransformation(),
-                        trailingIcon = {
-                            IconButton(onClick = { showPassword = !showPassword }, modifier = Modifier.size(24.dp)) {
-                                Icon(if (showPassword) Icons.Default.VisibilityOff else Icons.Default.Visibility, contentDescription = null, modifier = Modifier.size(14.dp))
-                            }
-                        },
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth(),
-                        textStyle = androidx.compose.ui.text.TextStyle(fontSize = 11.sp)
-                    )
-                    Spacer(Modifier.height(4.dp))
-                    Text("Los modelos marcados como (Free) pueden usarse sin saldo.", fontSize = 10.sp, color = Color.Gray)
-                }
-            }
-        }
-
+        Text(
+            text = "IA local · ${state.aiEndpoint.removePrefix("http://").removePrefix("https://")}",
+            fontSize = 10.sp,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(top = 5.dp)
+        )
         Spacer(Modifier.height(8.dp))
 
-        // Quick Prompt Pills
-        val quickScroll = rememberScrollState()
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .horizontalScroll(quickScroll),
-            horizontalArrangement = Arrangement.spacedBy(6.dp)
-        ) {
-            PromptPill(label = "📐 Fórmulas LaTeX", icon = Icons.Default.Psychology) {
-                state.sendAiMessage("Explica y genera las fórmulas matemáticas, modelos teóricos o ecuaciones relevantes asociadas a este documento utilizando notación matemática LaTeX detallada ($$...$$).")
-            }
-            PromptPill(label = "📊 Diagrama UML", icon = Icons.Default.AutoAwesome) {
-                state.sendAiMessage("Genera un diagrama conceptual o de arquitectura en formato Mermaid que represente los conceptos descritos en este documento.")
-            }
-            PromptPill(label = "📑 Resumir página", icon = Icons.Default.Edit) {
-                val p = (state.activeTab?.currentPage ?: 0) + 1
-                state.sendAiMessage("Resume con puntos clave y rigor analítico la página $p de este documento.")
-            }
-            PromptPill(label = "📋 Tabla comparativa", icon = Icons.Default.Quiz) {
-                state.sendAiMessage("Genera una tabla Markdown que compare y sintetice los conceptos y variables clave del documento.")
+        if (state.assistantMessages.isEmpty()) {
+            Column(modifier = Modifier.fillMaxWidth().padding(vertical = 16.dp)) {
+                Text("Pregunta sobre lo que estás leyendo.", fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                Text("El contexto se toma del PDF abierto y se envía solo al proxy local configurado.", fontSize = 11.sp, lineHeight = 16.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 4.dp))
+                Spacer(Modifier.height(10.dp))
+                PromptAction("Resumir la página") { state.sendAiMessage("Resume con precisión la página activa en puntos clave.") }
+                PromptAction("Explicar un concepto") { state.sendAiMessage("Explica los conceptos centrales de la página activa y distingue lo que afirma el documento de tus inferencias.") }
+                PromptAction("Extraer preguntas de estudio") { state.sendAiMessage("Formula preguntas de estudio basadas únicamente en el contenido del documento y responde brevemente a cada una.") }
             }
         }
 
-        Spacer(Modifier.height(10.dp))
-
-        // Chat Message Stream
         LazyColumn(
-            state = chatListState,
+            state = listState,
             modifier = Modifier.weight(1f).fillMaxWidth(),
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
-            if (state.assistantMessages.isEmpty()) {
-                item {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(top = 40.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Column(
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.spacedBy(6.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.AutoAwesome,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.5f),
-                                modifier = Modifier.size(32.dp)
-                            )
-                            Text(
-                                text = "¿En qué puedo ayudarte con este documento?",
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.Medium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                            Text(
-                                text = "Elige una sugerencia arriba o escribe tu consulta.",
-                                fontSize = 11.sp,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
-                            )
-                        }
-                    }
-                }
-            }
-
-            items(state.assistantMessages) { msg ->
-                val isUser = msg.role == MessageRole.USER
-
+            items(state.assistantMessages, key = { it.id }) { message ->
+                val user = message.role == MessageRole.USER
                 Column(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalAlignment = if (isUser) Alignment.End else Alignment.Start
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .border(
+                            width = 2.dp,
+                            color = if (user) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline,
+                            shape = RoundedCornerShape(2.dp)
+                        )
+                        .padding(start = 9.dp, end = 5.dp, top = 5.dp, bottom = 7.dp)
                 ) {
-                    Card(
-                        modifier = Modifier
-                            .fillMaxWidth(if (isUser) 0.9f else 1.0f),
-                        colors = CardDefaults.cardColors(
-                            containerColor = if (isUser) {
-                                MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
-                            } else {
-                                MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)
-                            }
-                        ),
-                        border = androidx.compose.foundation.BorderStroke(
-                            width = 0.5.dp,
-                            color = if (isUser) MaterialTheme.colorScheme.primary.copy(alpha = 0.3f) else MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)
-                        ),
-                        shape = RoundedCornerShape(10.dp)
-                    ) {
-                        Column(modifier = Modifier.padding(10.dp)) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
-                                ) {
-                                    Icon(
-                                        imageVector = if (isUser) Icons.Default.Edit else Icons.Default.AutoAwesome,
-                                        contentDescription = null,
-                                        tint = if (isUser) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.secondary,
-                                        modifier = Modifier.size(13.dp)
-                                    )
-                                    Text(
-                                        text = if (isUser) "Tú" else "Paper AI (${msg.modelUsed?.split("/")?.lastOrNull() ?: "Asistente"})",
-                                        fontSize = 11.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        color = if (isUser) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.secondary
-                                    )
-                                }
-                            }
-                            Spacer(Modifier.height(6.dp))
-                            DesktopMarkdownContent(markdown = msg.content)
-                        }
-                    }
+                    Text(
+                        text = if (user) "TÚ" else "PAPER",
+                        fontSize = 10.sp,
+                        letterSpacing = 0.7.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = if (user) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(Modifier.height(4.dp))
+                    DesktopMarkdownContent(markdown = message.content)
                 }
             }
-
             if (state.isAiThinking) {
                 item {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.08f))
-                            .padding(8.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        CircularProgressIndicator(strokeWidth = 2.dp, modifier = Modifier.size(16.dp))
-                        Text(
-                            text = "Pensando y analizando con ${state.selectedModelId}...",
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Medium,
-                            color = MaterialTheme.colorScheme.primary
-                        )
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(vertical = 8.dp)) {
+                        androidx.compose.material3.CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+                        Text("Consultando el proxy local…", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
             }
         }
 
-        Spacer(Modifier.height(8.dp))
-
-        // Chat Input Box
         Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(10.dp))
-                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f))
-                .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.35f), RoundedCornerShape(10.dp))
-                .padding(horizontal = 8.dp, vertical = 4.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(6.dp)
+            modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+            verticalAlignment = Alignment.Bottom
         ) {
             OutlinedTextField(
-                value = inputPrompt,
-                onValueChange = { inputPrompt = it },
-                placeholder = { Text("Escribe una pregunta sobre el PDF...", fontSize = 12.sp, color = Color.Gray) },
+                value = prompt,
+                onValueChange = { prompt = it },
+                placeholder = { Text("Escribe una pregunta", fontSize = 12.sp) },
+                maxLines = 4,
                 modifier = Modifier
                     .weight(1f)
                     .onPreviewKeyEvent { event ->
-                        if (event.key == Key.Enter && event.type == KeyEventType.KeyDown && !event.isCtrlPressed) {
-                            val p = inputPrompt.trim()
-                            if (p.isNotBlank() && !state.isAiThinking) {
-                                state.sendAiMessage(p)
-                                inputPrompt = ""
+                        if (event.key == Key.Enter && event.type == KeyEventType.KeyDown) {
+                            val text = prompt.trim()
+                            if (text.isNotBlank() && !state.isAiThinking) {
+                                state.sendAiMessage(text)
+                                prompt = ""
                             }
                             true
                         } else false
                     },
-                textStyle = androidx.compose.ui.text.TextStyle(fontSize = 12.sp),
-                colors = TextFieldDefaults.colors(
-                    focusedContainerColor = Color.Transparent,
-                    unfocusedContainerColor = Color.Transparent,
-                    focusedIndicatorColor = Color.Transparent,
-                    unfocusedIndicatorColor = Color.Transparent
-                ),
-                maxLines = 4
+                textStyle = androidx.compose.ui.text.TextStyle(fontSize = 12.sp)
             )
+            Spacer(Modifier.width(5.dp))
             IconButton(
                 onClick = {
-                    val p = inputPrompt.trim()
-                    if (p.isNotBlank()) {
-                        state.sendAiMessage(p)
-                        inputPrompt = ""
+                    val text = prompt.trim()
+                    if (text.isNotBlank()) {
+                        state.sendAiMessage(text)
+                        prompt = ""
                     }
                 },
-                enabled = inputPrompt.isNotBlank() && !state.isAiThinking,
+                enabled = prompt.isNotBlank() && !state.isAiThinking,
                 modifier = Modifier
-                    .size(36.dp)
-                    .clip(RoundedCornerShape(8.dp))
-                    .background(if (inputPrompt.isNotBlank() && !state.isAiThinking) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline.copy(alpha = 0.3f))
+                    .size(42.dp)
+                    .clip(RoundedCornerShape(6.dp))
+                    .background(if (prompt.isNotBlank() && !state.isAiThinking) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant)
             ) {
-                Icon(
-                    imageVector = Icons.AutoMirrored.Filled.Send,
-                    contentDescription = "Enviar",
-                    tint = Color.White,
-                    modifier = Modifier.size(16.dp)
-                )
+                Icon(Icons.AutoMirrored.Filled.Send, contentDescription = "Enviar pregunta", tint = if (prompt.isNotBlank() && !state.isAiThinking) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(18.dp))
             }
         }
     }
 }
 
 @Composable
-fun PromptPill(label: String, icon: ImageVector, onClick: () -> Unit) {
-    val interactionSource = remember { MutableInteractionSource() }
-    val isHovered by interactionSource.collectIsHoveredAsState()
-
-    Row(
-        modifier = Modifier
-            .clip(RoundedCornerShape(12.dp))
-            .background(if (isHovered) MaterialTheme.colorScheme.primary.copy(alpha = 0.15f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f))
-            .border(1.dp, if (isHovered) MaterialTheme.colorScheme.primary.copy(alpha = 0.4f) else Color.Transparent, RoundedCornerShape(12.dp))
-            .hoverable(interactionSource = interactionSource)
-            .clickable(interactionSource = interactionSource, indication = null) { onClick() }
-            .padding(horizontal = 10.dp, vertical = 5.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(4.dp)
-    ) {
-        Icon(imageVector = icon, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(12.dp))
-        Text(text = label, fontSize = 11.sp, fontWeight = FontWeight.Medium, color = MaterialTheme.colorScheme.onSurface)
+private fun PromptAction(label: String, onClick: () -> Unit) {
+    TextButton(onClick = onClick, modifier = Modifier.fillMaxWidth()) {
+        Text(label, modifier = Modifier.weight(1f), textAlign = androidx.compose.ui.text.style.TextAlign.Start)
     }
 }
 
 @Composable
-fun MarkdownNotesPane(state: WorkspaceState) {
-    val tab = state.activeTab
-    if (tab == null) {
-        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            Text("Abre un PDF para redactar notas", fontSize = 12.sp, color = Color.Gray)
-        }
-        return
-    }
-
-    var isPreview by remember { mutableStateOf(false) }
-
+private fun MarkdownNotesPane(state: WorkspaceState) {
+    val tab = state.activeTab ?: return
     Column(modifier = Modifier.fillMaxSize()) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                PromptPill(label = if (isPreview) "Modo Edición" else "Vista Previa", icon = Icons.Default.Edit) {
-                    isPreview = !isPreview
-                }
-            }
-        }
+        Text("Apuntes del documento", fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+        Text("Se guardan junto al PDF en una sesión de Paper.", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 3.dp))
         Spacer(Modifier.height(8.dp))
-
-        if (isPreview) {
-            LazyColumn(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .clip(RoundedCornerShape(8.dp))
-                    .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f))
-                    .padding(10.dp)
-            ) {
-                item {
-                    DesktopMarkdownContent(markdown = tab.documentNotes.ifBlank { "*No hay apuntes redactados aún.*" })
-                }
-            }
-        } else {
-            OutlinedTextField(
-                value = tab.documentNotes,
-                onValueChange = { tab.documentNotes = it; tab.isDirty = true },
-                placeholder = { Text("Escribe tus apuntes en Markdown...", fontSize = 12.sp) },
-                modifier = Modifier.fillMaxSize(),
-                textStyle = androidx.compose.ui.text.TextStyle(fontSize = 12.sp),
-                shape = RoundedCornerShape(8.dp)
-            )
-        }
-    }
-}
-
-@Composable
-fun FlashcardsPane(state: WorkspaceState) {
-    Column(
-        modifier = Modifier.fillMaxSize(),
-        verticalArrangement = Arrangement.spacedBy(10.dp)
-    ) {
-        Text("Fichas de Estudio y Active Recall", fontSize = 13.sp, fontWeight = FontWeight.Bold)
-        Text(
-            text = "Genera tarjetas de preguntas y respuestas inteligentes basadas en el contenido del documento PDF.",
-            fontSize = 11.sp,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
+        OutlinedTextField(
+            value = tab.documentNotes,
+            onValueChange = { tab.documentNotes = it; tab.isDirty = true },
+            placeholder = { Text("Escribe tus apuntes…", fontSize = 12.sp) },
+            modifier = Modifier.fillMaxSize(),
+            textStyle = androidx.compose.ui.text.TextStyle(fontSize = 12.sp)
         )
-        PromptPill(label = "✨ Generar 5 Fichas con IA", icon = Icons.Default.Quiz) {
-            state.sendAiMessage("Genera 5 tarjetas de estudio clave con preguntas y respuestas detalladas basadas en este documento.")
-        }
     }
 }
 
 @Composable
-fun MetadataPane(state: WorkspaceState) {
+private fun MetadataPane(state: WorkspaceState) {
     val meta = state.activeTab?.metadata ?: return
-    LazyColumn(modifier = Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        item {
-            MetadataCard(label = "Título", value = meta.title.ifBlank { "Sin título" })
-            MetadataCard(label = "Autor", value = meta.author.ifBlank { "Desconocido" })
-            MetadataCard(label = "Total Páginas", value = "${meta.pageCount}")
-            MetadataCard(label = "Versión PDF", value = "PDF ${meta.pdfVersion}")
-            MetadataCard(label = "Tamaño en disco", value = "${(meta.fileSize / 1024)} KB")
-            MetadataCard(label = "Cifrado AES", value = if (meta.isEncrypted) "Protegido con Contraseña" else "Sin cifrado")
-            MetadataCard(label = "Firma Criptográfica", value = if (meta.isSigned) "Firmado Digitalmente" else "Sin firmas")
-            MetadataCard(label = "Formularios AcroForms", value = if (meta.hasAcroForms) "Contiene campos interactivos" else "No")
-        }
-    }
-}
-
-@Composable
-fun MetadataCard(label: String, value: String) {
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(6.dp))
-            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f))
-            .padding(horizontal = 10.dp, vertical = 6.dp)
-    ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(text = label, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Text(text = value, fontSize = 11.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
+    val rows = listOf(
+        "Título" to meta.title.ifBlank { "Sin título" },
+        "Autor" to meta.author.ifBlank { "No indicado" },
+        "Páginas" to meta.pageCount.toString(),
+        "Tamaño" to "${meta.fileSize / 1024} KB",
+        "PDF" to meta.pdfVersion,
+        "Cifrado" to if (meta.isEncrypted) "Sí" else "No",
+        "Firmas" to if (meta.isSigned) "Detectadas" else "No detectadas"
+    )
+    LazyColumn(modifier = Modifier.fillMaxSize()) {
+        items(rows) { (label, value) ->
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+                verticalAlignment = Alignment.Top
+            ) {
+                Text(label, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.width(80.dp))
+                Text(value, fontSize = 12.sp, modifier = Modifier.weight(1f))
+            }
+            Box(Modifier.fillMaxWidth().height(1.dp).background(MaterialTheme.colorScheme.outline.copy(alpha = 0.35f)))
         }
     }
 }

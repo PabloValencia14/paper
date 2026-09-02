@@ -21,29 +21,24 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.AutoAwesome
-import androidx.compose.material.icons.filled.ChatBubble
 import androidx.compose.material.icons.filled.ChevronLeft
 import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Description
-import androidx.compose.material.icons.filled.FitScreen
 import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.Highlight
-import androidx.compose.material.icons.filled.History
-import androidx.compose.material.icons.filled.PictureAsPdf
 import androidx.compose.material.icons.filled.ZoomIn
 import androidx.compose.material.icons.filled.ZoomOut
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -67,14 +62,14 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.PointerIcon
-import androidx.compose.ui.input.pointer.isCtrlPressed
 import androidx.compose.ui.input.pointer.pointerHoverIcon
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -84,20 +79,22 @@ import com.pablo.paper.desktop.model.DesktopTool
 import com.pablo.paper.desktop.model.InkPoint
 import com.pablo.paper.desktop.model.InkStroke
 import com.pablo.paper.desktop.model.TextSelectionRange
-import com.pablo.paper.desktop.model.TextWord
 import com.pablo.paper.desktop.model.ViewMode
 import com.pablo.paper.desktop.state.RightDockTab
 import com.pablo.paper.desktop.state.TabDocumentState
 import com.pablo.paper.desktop.state.WorkspaceState
-import java.awt.FileDialog
-import java.awt.Frame
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import java.awt.Toolkit
 import java.awt.datatransfer.StringSelection
-import java.io.File
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.roundToInt
 
+/**
+ * Native PDFBox viewport. It intentionally owns the document surface so page
+ * state, gestures, annotations and rendering all speak to the same engine.
+ */
 @Composable
 fun DesktopPdfCanvas(
     workspaceState: WorkspaceState,
@@ -105,705 +102,555 @@ fun DesktopPdfCanvas(
 ) {
     val tab = workspaceState.activeTab
 
-    if (tab == null || !tab.isLoaded || tab.pageCount <= 0) {
-        MinimalistWelcomeScreen(
-            onOpenPdf = {
-                javax.swing.SwingUtilities.invokeLater {
-                    val fd = FileDialog(null as Frame?, "Abrir Documento PDF", FileDialog.LOAD)
-                    fd.setFilenameFilter { _, name -> name.lowercase().endsWith(".pdf") }
-                    fd.isVisible = true
-                    if (fd.file != null) workspaceState.openDocument(File(fd.directory, fd.file))
-                }
-            },
-            onOpenSample = {
-                val sample = File("sample_paper.pdf")
-                if (sample.exists()) workspaceState.openDocument(sample)
-            }
+    when {
+        tab == null -> ReadingDeskEmpty(
+            onOpenPdf = { openPdfPicker(workspaceState) },
+            modifier = modifier
         )
-        return
+        tab.isLoading -> DocumentLoadingState(tab.title, modifier)
+        !tab.isLoaded -> DocumentFailureState(
+            title = tab.title,
+            message = tab.loadError ?: "No se pudo preparar el documento.",
+            onClose = { workspaceState.closeTab(workspaceState.activeTabIndex) },
+            modifier = modifier
+        )
+        else -> ReaderWorkspace(tab = tab, workspaceState = workspaceState, modifier = modifier)
     }
+}
 
-    Box(
+@Composable
+private fun ReaderWorkspace(
+    tab: TabDocumentState,
+    workspaceState: WorkspaceState,
+    modifier: Modifier
+) {
+    BoxWithConstraints(
         modifier = modifier
             .fillMaxSize()
             .clipToBounds()
             .background(MaterialTheme.colorScheme.background)
     ) {
+        when (tab.viewMode) {
+            ViewMode.CONTINUOUS_SCROLL -> ContinuousReader(tab, maxWidth, maxHeight)
+            ViewMode.TWO_PAGE_SPREAD -> SpreadReader(tab, maxWidth, maxHeight)
+            else -> SinglePageReader(tab, maxWidth, maxHeight)
+        }
 
-        PdfJsViewer(
+        SelectionActions(
             tab = tab,
-            modifier = Modifier.fillMaxSize(),
-            viewMode = tab.viewMode
+            workspaceState = workspaceState,
+            modifier = Modifier
+                .align(Alignment.TopCenter)
+                .padding(top = 14.dp)
         )
 
-        // Floating Bottom HUD Pill Bar (Acrobat Style)
-        FloatingPdfHud(
+        ReaderControls(
             tab = tab,
             modifier = Modifier
                 .align(Alignment.BottomCenter)
-                .padding(bottom = 16.dp)
+                .padding(bottom = 14.dp)
         )
     }
 }
 
 @Composable
-fun MinimalistWelcomeScreen(
-    onOpenPdf: () -> Unit,
-    onOpenSample: () -> Unit
-) {
+private fun ReadingDeskEmpty(onOpenPdf: () -> Unit, modifier: Modifier) {
     Box(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background)
-            .padding(32.dp),
+            .background(MaterialTheme.colorScheme.background),
         contentAlignment = Alignment.Center
     ) {
         Column(
+            modifier = Modifier.width(420.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(16.dp),
-            modifier = Modifier.width(460.dp)
+            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            Box(
-                modifier = Modifier
-                    .size(56.dp)
-                    .clip(RoundedCornerShape(14.dp))
-                    .background(Color(0xFFEB1000).copy(alpha = 0.12f))
-                    .border(1.dp, Color(0xFFEB1000).copy(alpha = 0.3f), RoundedCornerShape(14.dp)),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = Icons.Default.PictureAsPdf,
-                    contentDescription = null,
-                    tint = Color(0xFFEB1000),
-                    modifier = Modifier.size(30.dp)
-                )
-            }
-
-            Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text(
-                    text = "Paper",
-                    fontSize = 22.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-                Text(
-                    text = "Lector y editor de documentos PDF de alto rendimiento",
-                    fontSize = 12.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    textAlign = TextAlign.Center
-                )
-            }
-
-            Spacer(Modifier.height(4.dp))
-
+            Icon(
+                imageVector = Icons.Default.Description,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(40.dp)
+            )
+            Text(
+                text = "Tu mesa está vacía",
+                fontFamily = androidx.compose.ui.text.font.FontFamily.Serif,
+                fontSize = 23.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onBackground
+            )
+            Text(
+                text = "Abre un PDF para leer, marcar y guardar una sesión de trabajo local.",
+                fontSize = 13.sp,
+                lineHeight = 19.sp,
+                textAlign = TextAlign.Center,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Spacer(Modifier.height(6.dp))
             Button(
                 onClick = onOpenPdf,
-                modifier = Modifier
-                    .height(42.dp)
-                    .width(220.dp),
-                shape = RoundedCornerShape(8.dp),
+                modifier = Modifier.height(42.dp),
+                shape = RoundedCornerShape(7.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
             ) {
-                Icon(imageVector = Icons.Default.FolderOpen, contentDescription = null, modifier = Modifier.size(17.dp))
+                Icon(Icons.Default.FolderOpen, contentDescription = null, modifier = Modifier.size(18.dp))
                 Spacer(Modifier.width(8.dp))
-                Text(text = "Abrir archivo PDF", fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                Text("Abrir PDF", fontWeight = FontWeight.SemiBold)
             }
-
             Text(
-                text = "o arrastra y suelta un archivo aquí",
+                text = "Ctrl+O",
                 fontSize = 11.sp,
-                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
+        }
+    }
+}
 
-            val sampleFile = remember { File("sample_paper.pdf") }
-            if (sampleFile.exists()) {
-                Spacer(Modifier.height(8.dp))
-                Card(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable { onOpenSample() },
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                    border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.4f)),
-                    shape = RoundedCornerShape(8.dp)
-                ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(10.dp)
-                    ) {
-                        Icon(imageVector = Icons.Default.History, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(text = sampleFile.name, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface)
-                            Text(text = "Documento de muestra • ${(sampleFile.length() / 1024)} KB", fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        }
-                    }
-                }
+@Composable
+private fun DocumentLoadingState(title: String, modifier: Modifier) {
+    Box(modifier = modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            CircularProgressIndicator(strokeWidth = 2.dp, modifier = Modifier.size(26.dp))
+            Text("Preparando $title", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+    }
+}
+
+@Composable
+private fun DocumentFailureState(title: String, message: String, onClose: () -> Unit, modifier: Modifier) {
+    Box(modifier = modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+        Column(
+            modifier = Modifier.width(440.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Text(title, fontFamily = androidx.compose.ui.text.font.FontFamily.Serif, fontSize = 21.sp, fontWeight = FontWeight.SemiBold)
+            Text(message, textAlign = TextAlign.Center, fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Button(onClick = onClose, shape = RoundedCornerShape(7.dp)) {
+                Icon(Icons.Default.Close, contentDescription = null, modifier = Modifier.size(16.dp))
+                Spacer(Modifier.width(6.dp))
+                Text("Cerrar documento")
             }
         }
     }
 }
 
 @Composable
-fun SinglePageRenderer(
-    tab: TabDocumentState,
-    workspaceState: WorkspaceState,
-    containerWidth: Int,
-    containerHeight: Int
-) {
-    val pageInfo = remember(tab.currentPage) { tab.engine.getPageInfo(tab.currentPage) }
-    val aspect = pageInfo?.aspectRatio ?: 0.707f
-    val basePdfW = pageInfo?.width ?: 595
-    val basePdfH = pageInfo?.height ?: 842
-
-    // Compute display size in DP based on container and zoomScale
-    val availableH = (containerHeight - 70).coerceAtLeast(400)
-    val baseDisplayH = availableH.toFloat()
-    val baseDisplayW = baseDisplayH * aspect
-
-    val displayWidthDp = (baseDisplayW * tab.zoomScale).dp
-    val displayHeightDp = (baseDisplayH * tab.zoomScale).dp
-
-    // High-resolution pixel dimensions for rasterization
-    val renderTargetW = (baseDisplayW * tab.zoomScale * 1.5f).toInt().coerceIn(400, 8192)
-    val renderTargetH = (baseDisplayH * tab.zoomScale * 1.5f).toInt().coerceIn(500, 8192)
-
-    var renderedBitmap by remember(tab.currentPage, tab.zoomScale, tab.rotation) {
-        mutableStateOf<ImageBitmap?>(null)
-    }
-
-    // Text Layout for Selection
-    val textLayout = remember(tab.currentPage) {
-        tab.getPageTextLayout(tab.currentPage)
-    }
-
-    var dragStartOffset by remember { mutableStateOf<Offset?>(null) }
-    var dragCurrentOffset by remember { mutableStateOf<Offset?>(null) }
-
-    LaunchedEffect(tab.currentPage, tab.zoomScale, tab.rotation, renderTargetW, renderTargetH) {
-        renderedBitmap = tab.engine.renderPage(tab.currentPage, renderTargetW, renderTargetH, tab.rotation)
-        tab.engine.prefetch(tab.currentPage, renderTargetW, renderTargetH)
-    }
+private fun SinglePageReader(tab: TabDocumentState, maxWidth: Dp, maxHeight: Dp) {
+    val pageInfo = remember(tab.currentPage, tab.rotation) { tab.engine.getPageInfo(tab.currentPage) }
+    val rawAspect = pageInfo?.aspectRatio ?: 0.707f
+    val aspect = if (tab.rotation % 180 == 0) rawAspect else 1f / rawAspect
+    val availableHeight = (maxHeight - 48.dp).coerceAtLeast(220.dp)
+    val pageHeight = (availableHeight.value * tab.zoomScale.coerceIn(0.35f, 4f)).dp
+    val pageWidth = (pageHeight.value * aspect).dp
 
     Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .pointerInput(tab.activeTool) {
-                awaitPointerEventScope {
-                    while (true) {
-                        val event = awaitPointerEvent()
-                        // Smooth Mouse Wheel Zoom with Ctrl
-                        if (event.type == PointerEventType.Scroll && event.keyboardModifiers.isCtrlPressed) {
-                            val delta = event.changes.firstOrNull()?.scrollDelta?.y ?: 0f
-                            if (delta < 0) {
-                                tab.zoomScale = (tab.zoomScale * 1.15f).coerceAtMost(6.0f)
-                            } else if (delta > 0) {
-                                tab.zoomScale = (tab.zoomScale / 1.15f).coerceAtLeast(0.25f)
-                            }
-                        }
-                    }
-                }
-            },
+        modifier = Modifier.fillMaxSize().padding(horizontal = 24.dp, vertical = 20.dp),
         contentAlignment = Alignment.Center
     ) {
-        // Main Paper Sheet
-        Box(
-            modifier = Modifier
-                .offset { IntOffset(tab.panOffset.x.roundToInt(), tab.panOffset.y.roundToInt()) }
-                .size(displayWidthDp, displayHeightDp)
-                .shadow(12.dp, RoundedCornerShape(2.dp))
-                .background(Color.White, RoundedCornerShape(2.dp))
-                .pointerHoverIcon(
-                    when (tab.activeTool) {
-                        DesktopTool.TEXT_SELECTION, DesktopTool.HIGHLIGHT -> PointerIcon.Text
-                        DesktopTool.PAN_HAND -> PointerIcon.Hand
-                        else -> PointerIcon.Default
-                    }
-                )
-                .pointerInput(tab.activeTool, textLayout) {
-                    if (tab.activeTool == DesktopTool.PAN_HAND) {
-                        detectDragGestures { change, dragAmount ->
-                            change.consume()
-                            tab.panOffset += dragAmount
-                        }
-                    } else if (tab.activeTool == DesktopTool.TEXT_SELECTION || tab.activeTool == DesktopTool.HIGHLIGHT) {
-                        // Native Text Drag Selection
-                        detectDragGestures(
-                            onDragStart = { offset ->
-                                dragStartOffset = offset
-                                dragCurrentOffset = offset
-                                tab.clearSelection()
-                            },
-                            onDrag = { change, _ ->
-                                change.consume()
-                                dragCurrentOffset = change.position
-
-                                val start = dragStartOffset ?: return@detectDragGestures
-                                val cur = dragCurrentOffset ?: return@detectDragGestures
-
-                                val selRect = Rect(
-                                    left = min(start.x, cur.x),
-                                    top = min(start.y, cur.y),
-                                    right = max(start.x, cur.x),
-                                    bottom = max(start.y, cur.y)
-                                )
-
-                                // Convert selection rect to normalized coordinates 0..1
-                                val pageW = size.width.toFloat()
-                                val pageH = size.height.toFloat()
-
-                                val selectedWords = textLayout.words.filter { word ->
-                                    val wordRect = Rect(
-                                        left = word.x * pageW,
-                                        top = word.y * pageH,
-                                        right = (word.x + word.width) * pageW,
-                                        bottom = (word.y + word.height) * pageH
-                                    )
-                                    selRect.overlaps(wordRect)
-                                }
-
-                                if (selectedWords.isNotEmpty()) {
-                                    val fullStr = selectedWords.joinToString(" ") { it.text }
-                                    tab.selectedTextRange = TextSelectionRange(
-                                        pageIndex = tab.currentPage,
-                                        selectedWords = selectedWords,
-                                        selectedText = fullStr
-                                    )
-                                }
-                            },
-                            onDragEnd = {
-                                dragStartOffset = null
-                                dragCurrentOffset = null
-                            }
-                        )
-                    } else if (tab.activeTool == DesktopTool.PEN) {
-                        detectDragGestures(
-                            onDragStart = { offset ->
-                                tab.currentDraftPoints.clear()
-                                tab.currentDraftPoints.add(InkPoint(offset.x, offset.y))
-                            },
-                            onDrag = { change, _ ->
-                                change.consume()
-                                tab.currentDraftPoints.add(InkPoint(change.position.x, change.position.y))
-                            },
-                            onDragEnd = {
-                                if (tab.currentDraftPoints.size > 1) {
-                                    val stroke = InkStroke(
-                                        points = tab.currentDraftPoints.toList(),
-                                        color = tab.strokeColor.value.toLong(),
-                                        strokeWidth = tab.strokeWidth,
-                                        isHighlighter = false
-                                    )
-                                    tab.addAnnotation(
-                                        Annotation(
-                                            id = java.util.UUID.randomUUID().toString(),
-                                            pageIndex = tab.currentPage,
-                                            type = AnnotationType.INK,
-                                            stroke = stroke
-                                        )
-                                    )
-                                }
-                                tab.currentDraftPoints.clear()
-                            }
-                        )
-                    } else if (tab.activeTool == DesktopTool.STICKY_NOTE) {
-                        detectTapGestures { offset ->
-                            tab.addAnnotation(
-                                Annotation(
-                                    id = java.util.UUID.randomUUID().toString(),
-                                    pageIndex = tab.currentPage,
-                                    type = AnnotationType.STICKY_NOTE,
-                                    textContent = "Nota adhesiva",
-                                    rects = listOf(floatArrayOf(offset.x, offset.y, offset.x + 20f, offset.y + 20f))
-                                )
-                            )
-                        }
-                    }
-                }
-        ) {
-            val bmp = renderedBitmap
-            if (bmp != null) {
-                Image(
-                    bitmap = bmp,
-                    contentDescription = "Página ${tab.currentPage + 1}",
-                    modifier = Modifier.fillMaxSize(),
-                    contentScale = ContentScale.FillBounds
-                )
-            } else {
-                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    CircularProgressIndicator(color = MaterialTheme.colorScheme.primary, strokeWidth = 2.dp)
-                }
-            }
-
-            // Real-Time Text Selection Highlighting Layer
-            Canvas(modifier = Modifier.fillMaxSize()) {
-                val sel = tab.selectedTextRange
-                if (sel != null && sel.pageIndex == tab.currentPage) {
-                    for (word in sel.selectedWords) {
-                        val rx = word.x * size.width
-                        val ry = word.y * size.height
-                        val rw = word.width * size.width
-                        val rh = word.height * size.height
-
-                        drawRect(
-                            color = Color(0xFF0078D4),
-                            topLeft = Offset(rx, ry),
-                            size = androidx.compose.ui.geometry.Size(rw, rh),
-                            alpha = 0.35f
-                        )
-                    }
-                }
-
-                // Render vector annotations
-                val pageAnnotations = tab.annotations.filter { it.pageIndex == tab.currentPage }
-                for (ann in pageAnnotations) {
-                    val st = ann.stroke
-                    if (st != null && st.points.size > 1) {
-                        val path = Path().apply {
-                            moveTo(st.points[0].x, st.points[0].y)
-                            for (p in 1 until st.points.size) {
-                                lineTo(st.points[p].x, st.points[p].y)
-                            }
-                        }
-                        drawPath(
-                            path = path,
-                            color = Color(st.color.toULong()),
-                            alpha = if (st.isHighlighter) 0.4f else 1.0f,
-                            style = Stroke(
-                                width = if (st.isHighlighter) st.strokeWidth * 3f else st.strokeWidth,
-                                cap = StrokeCap.Round,
-                                join = StrokeJoin.Round
-                            )
-                        )
-                    }
-                }
-
-                if (tab.currentDraftPoints.size > 1) {
-                    val path = Path().apply {
-                        moveTo(tab.currentDraftPoints[0].x, tab.currentDraftPoints[0].y)
-                        for (p in 1 until tab.currentDraftPoints.size) {
-                            lineTo(tab.currentDraftPoints[p].x, tab.currentDraftPoints[p].y)
-                        }
-                    }
-                    drawPath(
-                        path = path,
-                        color = tab.strokeColor,
-                        alpha = 1.0f,
-                        style = Stroke(
-                            width = tab.strokeWidth,
-                            cap = StrokeCap.Round,
-                            join = StrokeJoin.Round
-                        )
-                    )
-                }
-            }
-
-            // Sticky Note icons
-            tab.annotations.filter { it.pageIndex == tab.currentPage && it.type == AnnotationType.STICKY_NOTE }.forEach { note ->
-                val r = note.rects?.firstOrNull() ?: floatArrayOf(20f, 20f, 40f, 40f)
-                Box(
-                    modifier = Modifier
-                        .offset { IntOffset(r[0].roundToInt(), r[1].roundToInt()) }
-                        .size(22.dp)
-                        .background(Color(0xFFF59E0B), RoundedCornerShape(4.dp)),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(imageVector = Icons.Default.ChatBubble, contentDescription = "Nota", tint = Color.White, modifier = Modifier.size(13.dp))
-                }
-            }
-        }
-
-        // Floating Text Selection Action Pill (Acrobat / Edge Style)
-        val selection = tab.selectedTextRange
-        if (selection != null && selection.selectedText.isNotBlank()) {
-            Box(
-                modifier = Modifier
-                    .align(Alignment.TopCenter)
-                    .padding(top = 16.dp)
-                    .clip(RoundedCornerShape(8.dp))
-                    .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.96f))
-                    .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.4f), RoundedCornerShape(8.dp))
-                    .shadow(12.dp, RoundedCornerShape(8.dp))
-                    .padding(horizontal = 8.dp, vertical = 4.dp)
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    // Copy
-                    Button(
-                        onClick = {
-                            val str = selection.selectedText
-                            val sel = StringSelection(str)
-                            Toolkit.getDefaultToolkit().systemClipboard.setContents(sel, sel)
-                            tab.clearSelection()
-                        },
-                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
-                        shape = RoundedCornerShape(6.dp),
-                        modifier = Modifier.height(28.dp)
-                    ) {
-                        Icon(Icons.Default.ContentCopy, contentDescription = null, modifier = Modifier.size(13.dp))
-                        Spacer(Modifier.width(4.dp))
-                        Text("Copiar", fontSize = 11.sp)
-                    }
-
-                    // Highlight
-                    Button(
-                        onClick = {
-                            val boundsList = selection.selectedWords.map { it.bounds }
-                            tab.addAnnotation(
-                                Annotation(
-                                    id = java.util.UUID.randomUUID().toString(),
-                                    pageIndex = tab.currentPage,
-                                    type = AnnotationType.HIGHLIGHT,
-                                    rects = boundsList
-                                )
-                            )
-                            tab.clearSelection()
-                        },
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFF59E0B)),
-                        shape = RoundedCornerShape(6.dp),
-                        modifier = Modifier.height(28.dp)
-                    ) {
-                        Icon(Icons.Default.Highlight, contentDescription = null, tint = Color.Black, modifier = Modifier.size(13.dp))
-                        Spacer(Modifier.width(4.dp))
-                        Text("Resaltar", fontSize = 11.sp, color = Color.Black)
-                    }
-
-                    // Ask AI
-                    Button(
-                        onClick = {
-                            workspaceState.isRightDockOpen = true
-                            workspaceState.rightDockTab = RightDockTab.AI_ASSISTANT
-                            workspaceState.sendAiMessage("Explica o analiza este fragmento del documento:\n\"${selection.selectedText}\"")
-                            tab.clearSelection()
-                        },
-                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
-                        shape = RoundedCornerShape(6.dp),
-                        modifier = Modifier.height(28.dp)
-                    ) {
-                        Icon(Icons.Default.AutoAwesome, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(13.dp))
-                        Spacer(Modifier.width(4.dp))
-                        Text("Preguntar a la IA", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurface)
-                    }
-                }
-            }
-        }
+        PageSurface(
+            tab = tab,
+            pageIndex = tab.currentPage,
+            width = pageWidth,
+            height = pageHeight,
+            interactive = true,
+            allowPan = true,
+            modifier = Modifier.offset { IntOffset(tab.panOffset.x.roundToInt(), tab.panOffset.y.roundToInt()) }
+        )
     }
 }
 
 @Composable
-fun ContinuousScrollRenderer(
-    tab: TabDocumentState,
-    containerWidth: Int
-) {
+private fun ContinuousReader(tab: TabDocumentState, maxWidth: Dp, maxHeight: Dp) {
     val listState = rememberLazyListState()
-    val targetW = (containerWidth * 0.7f * tab.zoomScale).toInt().coerceIn(350, 4000)
+    val pageWidth = (maxWidth * 0.76f * tab.zoomScale.coerceIn(0.45f, 1.8f)).coerceIn(260.dp, 980.dp)
+
+    LaunchedEffect(tab.currentPage) {
+        if (tab.currentPage in 0 until tab.pageCount) listState.animateScrollToItem(tab.currentPage)
+    }
 
     LazyColumn(
         state = listState,
-        modifier = Modifier.fillMaxSize().padding(vertical = 24.dp),
+        modifier = Modifier.fillMaxSize().padding(vertical = 28.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(20.dp)
     ) {
-        items(tab.pageCount) { pageIndex ->
-            var pageBmp by remember(pageIndex, tab.zoomScale, tab.rotation) { mutableStateOf<ImageBitmap?>(null) }
-            val pageInfo = remember(pageIndex) { tab.engine.getPageInfo(pageIndex) }
-            val aspect = pageInfo?.aspectRatio ?: 0.707f
-            val targetH = (targetW / aspect).toInt()
+        items((0 until tab.pageCount).toList(), key = { it }) { pageIndex ->
+            val info = remember(pageIndex, tab.rotation) { tab.engine.getPageInfo(pageIndex) }
+            val rawAspect = info?.aspectRatio ?: 0.707f
+            val aspect = if (tab.rotation % 180 == 0) rawAspect else 1f / rawAspect
+            val pageHeight = (pageWidth.value / aspect).dp
 
-            LaunchedEffect(pageIndex, tab.zoomScale, tab.rotation) {
-                pageBmp = tab.engine.renderPage(pageIndex, (targetW * 1.5f).toInt(), (targetH * 1.5f).toInt(), tab.rotation)
-            }
-
-            Box(
-                modifier = Modifier
-                    .size((targetW / 1.25f).dp, (targetH / 1.25f).dp)
-                    .shadow(10.dp, RoundedCornerShape(2.dp))
-                    .background(Color.White, RoundedCornerShape(2.dp)),
-                contentAlignment = Alignment.Center
-            ) {
-                val bmp = pageBmp
-                if (bmp != null) {
-                    Image(
-                        bitmap = bmp,
-                        contentDescription = "Página ${pageIndex + 1}",
-                        modifier = Modifier.fillMaxSize(),
-                        contentScale = ContentScale.FillBounds
-                    )
-                } else {
-                    CircularProgressIndicator(color = MaterialTheme.colorScheme.primary, strokeWidth = 2.dp)
+            PageSurface(
+                tab = tab,
+                pageIndex = pageIndex,
+                width = pageWidth,
+                height = pageHeight,
+                interactive = false,
+                allowPan = false,
+                modifier = Modifier.pointerInput(pageIndex) {
+                    detectTapGestures { tab.currentPage = pageIndex }
                 }
-            }
+            )
         }
     }
 }
 
 @Composable
-fun TwoPageSpreadRenderer(
-    tab: TabDocumentState,
-    containerWidth: Int,
-    containerHeight: Int
-) {
-    val leftPage = tab.currentPage
-    val rightPage = (tab.currentPage + 1).takeIf { it < tab.pageCount }
+private fun SpreadReader(tab: TabDocumentState, maxWidth: Dp, maxHeight: Dp) {
+    val leftPage = tab.currentPage.coerceAtMost((tab.pageCount - 1).coerceAtLeast(0))
+    val rightPage = (leftPage + 1).takeIf { it < tab.pageCount }
+    val gap = 16.dp
+    val maximumHeight = (maxHeight - 76.dp).coerceAtLeast(220.dp)
+    val pageInfo = remember(leftPage, tab.rotation) { tab.engine.getPageInfo(leftPage) }
+    val rawAspect = pageInfo?.aspectRatio ?: 0.707f
+    val aspect = if (tab.rotation % 180 == 0) rawAspect else 1f / rawAspect
+    val widthBoundHeight = ((maxWidth - gap - 64.dp).value / (aspect * if (rightPage == null) 1f else 2f)).dp
+    val pageHeight = min(maximumHeight.value, widthBoundHeight.value).coerceAtLeast(200f).times(tab.zoomScale.coerceIn(0.45f, 1.5f)).dp
+    val pageWidth = (pageHeight.value * aspect).dp
 
     Row(
         modifier = Modifier.fillMaxSize().padding(24.dp),
         horizontalArrangement = Arrangement.Center,
         verticalAlignment = Alignment.CenterVertically
     ) {
-        SinglePageSpreadItem(tab = tab, pageIndex = leftPage, maxHeight = containerHeight - 60)
-        Spacer(Modifier.width(16.dp))
+        PageSurface(tab, leftPage, pageWidth, pageHeight, interactive = false, allowPan = false)
         if (rightPage != null) {
-            SinglePageSpreadItem(tab = tab, pageIndex = rightPage, maxHeight = containerHeight - 60)
+            Spacer(Modifier.width(gap))
+            PageSurface(tab, rightPage, pageWidth, pageHeight, interactive = false, allowPan = false)
         }
     }
 }
 
 @Composable
-fun SinglePageSpreadItem(tab: TabDocumentState, pageIndex: Int, maxHeight: Int) {
-    var bmp by remember(pageIndex, tab.zoomScale, tab.rotation) { mutableStateOf<ImageBitmap?>(null) }
-    val pageInfo = remember(pageIndex) { tab.engine.getPageInfo(pageIndex) }
-    val aspect = pageInfo?.aspectRatio ?: 0.707f
-    val targetH = (maxHeight * 0.85f * tab.zoomScale).toInt().coerceIn(300, 3000)
-    val targetW = (targetH * aspect).toInt()
+private fun PageSurface(
+    tab: TabDocumentState,
+    pageIndex: Int,
+    width: Dp,
+    height: Dp,
+    interactive: Boolean,
+    allowPan: Boolean,
+    modifier: Modifier = Modifier
+) {
+    val density = LocalDensity.current
+    val targetWidth = remember(width, density) { (with(density) { width.roundToPx() } * 1.25f).roundToInt().coerceIn(320, 4096) }
+    val targetHeight = remember(height, density) { (with(density) { height.roundToPx() } * 1.25f).roundToInt().coerceIn(420, 4096) }
+    var bitmap by remember(pageIndex, targetWidth, targetHeight, tab.rotation) { mutableStateOf<ImageBitmap?>(null) }
+    var textLayout by remember(pageIndex) { mutableStateOf<com.pablo.paper.desktop.model.PageTextLayout?>(null) }
+    var dragStart by remember(pageIndex) { mutableStateOf<Offset?>(null) }
 
-    LaunchedEffect(pageIndex, tab.zoomScale, tab.rotation) {
-        bmp = tab.engine.renderPage(pageIndex, (targetW * 1.5f).toInt(), (targetH * 1.5f).toInt(), tab.rotation)
+    LaunchedEffect(pageIndex, targetWidth, targetHeight, tab.rotation) {
+        bitmap = tab.engine.renderPage(pageIndex, targetWidth, targetHeight, tab.rotation)
+        if (pageIndex == tab.currentPage) tab.engine.prefetch(pageIndex, targetWidth, targetHeight)
+    }
+    LaunchedEffect(pageIndex, interactive) {
+        if (interactive) textLayout = withContext(Dispatchers.IO) { tab.getPageTextLayout(pageIndex) }
+    }
+
+    val pointerModifier = if (!interactive) {
+        Modifier
+    } else {
+        Modifier
+            .pointerHoverIcon(
+                when (tab.activeTool) {
+                    DesktopTool.PAN_HAND -> PointerIcon.Hand
+                    DesktopTool.TEXT_SELECTION, DesktopTool.HIGHLIGHT -> PointerIcon.Text
+                    else -> PointerIcon.Default
+                }
+            )
+            .pointerInput(tab.activeTool, pageIndex, textLayout) {
+                when (tab.activeTool) {
+                    DesktopTool.PAN_HAND -> if (allowPan) {
+                        detectDragGestures { change, dragAmount ->
+                            change.consume()
+                            tab.panOffset += dragAmount
+                        }
+                    }
+                    DesktopTool.PEN -> {
+                        detectDragGestures(
+                            onDragStart = { point ->
+                                tab.discardDraft()
+                                tab.draftPageIndex = pageIndex
+                                tab.currentDraftPoints.add(normalizedPoint(point, size))
+                            },
+                            onDrag = { change, _ ->
+                                change.consume()
+                                tab.currentDraftPoints.add(normalizedPoint(change.position, size))
+                            },
+                            onDragCancel = tab::discardDraft,
+                            onDragEnd = {
+                                val points = tab.currentDraftPoints.toList()
+                                if (points.size > 1) {
+                                    tab.addAnnotation(
+                                        Annotation(
+                                            id = java.util.UUID.randomUUID().toString(),
+                                            pageIndex = pageIndex,
+                                            type = AnnotationType.INK,
+                                            stroke = InkStroke(
+                                                points = points,
+                                                color = tab.strokeColor.value.toLong(),
+                                                strokeWidth = tab.strokeWidth
+                                            ),
+                                            color = tab.strokeColor.value.toLong(),
+                                            strokeWidth = tab.strokeWidth
+                                        )
+                                    )
+                                }
+                                tab.discardDraft()
+                            }
+                        )
+                    }
+                    DesktopTool.TEXT_SELECTION,
+                    DesktopTool.HIGHLIGHT -> {
+                        detectDragGestures(
+                            onDragStart = { point ->
+                                dragStart = point
+                                tab.clearSelection()
+                            },
+                            onDrag = { change, _ ->
+                                change.consume()
+                                val start = dragStart ?: return@detectDragGestures
+                                val selected = wordsInSelection(textLayout, start, change.position, size.width.toFloat(), size.height.toFloat())
+                                if (selected.isNotEmpty()) {
+                                    tab.selectedTextRange = TextSelectionRange(
+                                        pageIndex = pageIndex,
+                                        selectedWords = selected,
+                                        selectedText = selected.joinToString(" ") { it.text }
+                                    )
+                                }
+                            },
+                            onDragEnd = { dragStart = null },
+                            onDragCancel = { dragStart = null }
+                        )
+                    }
+                    else -> Unit
+                }
+            }
     }
 
     Box(
-        modifier = Modifier
-            .size((targetW / 1.25f).dp, (targetH / 1.25f).dp)
-            .shadow(10.dp, RoundedCornerShape(2.dp))
-            .background(Color.White, RoundedCornerShape(2.dp)),
-        contentAlignment = Alignment.Center
+        modifier = modifier
+            .size(width, height)
+            .shadow(10.dp, RoundedCornerShape(2.dp), clip = false)
+            .background(Color.White, RoundedCornerShape(2.dp))
+            .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.28f), RoundedCornerShape(2.dp))
+            .then(pointerModifier)
     ) {
-        val img = bmp
-        if (img != null) {
+        val currentBitmap = bitmap
+        if (currentBitmap == null) {
+            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                CircularProgressIndicator(strokeWidth = 2.dp, modifier = Modifier.size(24.dp))
+            }
+        } else {
             Image(
-                bitmap = img,
+                bitmap = currentBitmap,
                 contentDescription = "Página ${pageIndex + 1}",
                 modifier = Modifier.fillMaxSize(),
                 contentScale = ContentScale.FillBounds
             )
-        } else {
-            CircularProgressIndicator(color = MaterialTheme.colorScheme.primary, strokeWidth = 2.dp)
+        }
+
+        AnnotationLayer(tab = tab, pageIndex = pageIndex)
+    }
+}
+
+@Composable
+private fun AnnotationLayer(tab: TabDocumentState, pageIndex: Int) {
+    val annotations = tab.annotations.filter { it.pageIndex == pageIndex }
+    Canvas(modifier = Modifier.fillMaxSize()) {
+        annotations.forEach { annotation ->
+            val color = Color(annotation.color.toULong())
+            when (annotation.type) {
+                AnnotationType.INK -> annotation.stroke?.let { stroke ->
+                    drawInkStroke(stroke, color)
+                }
+                AnnotationType.HIGHLIGHT -> annotation.rects.orEmpty().forEach { rect ->
+                    drawRect(
+                        color = color,
+                        alpha = 0.34f,
+                        topLeft = Offset(rect.getOrElse(0) { 0f } * size.width, rect.getOrElse(1) { 0f } * size.height),
+                        size = androidx.compose.ui.geometry.Size(
+                            ((rect.getOrElse(2) { 0f } - rect.getOrElse(0) { 0f }) * size.width).coerceAtLeast(1f),
+                            ((rect.getOrElse(3) { 0f } - rect.getOrElse(1) { 0f }) * size.height).coerceAtLeast(1f)
+                        )
+                    )
+                }
+                AnnotationType.UNDERLINE,
+                AnnotationType.STRIKETHROUGH -> annotation.rects.orEmpty().forEach { rect ->
+                    val left = rect.getOrElse(0) { 0f } * size.width
+                    val top = rect.getOrElse(1) { 0f } * size.height
+                    val right = rect.getOrElse(2) { 0f } * size.width
+                    val bottom = rect.getOrElse(3) { 0f } * size.height
+                    val y = if (annotation.type == AnnotationType.UNDERLINE) bottom else (top + bottom) / 2f
+                    drawLine(color = color, start = Offset(left, y), end = Offset(right, y), strokeWidth = 1.8f)
+                }
+                else -> Unit
+            }
+        }
+        if (tab.draftPageIndex == pageIndex && tab.currentDraftPoints.size > 1) {
+            drawInkStroke(
+                stroke = InkStroke(tab.currentDraftPoints.toList(), tab.strokeColor.value.toLong(), tab.strokeWidth),
+                color = tab.strokeColor
+            )
+        }
+    }
+}
+
+private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawInkStroke(stroke: InkStroke, color: Color) {
+    if (stroke.points.size < 2) return
+    val path = Path().apply {
+        moveTo(stroke.points.first().x * size.width, stroke.points.first().y * size.height)
+        stroke.points.drop(1).forEach { point -> lineTo(point.x * size.width, point.y * size.height) }
+    }
+    drawPath(
+        path = path,
+        color = color,
+        alpha = if (stroke.isHighlighter) 0.35f else stroke.alpha,
+        style = Stroke(
+            width = if (stroke.isHighlighter) stroke.strokeWidth * 3f else stroke.strokeWidth,
+            cap = StrokeCap.Round,
+            join = StrokeJoin.Round
+        )
+    )
+}
+
+private fun normalizedPoint(point: Offset, size: androidx.compose.ui.unit.IntSize): InkPoint = InkPoint(
+    x = (point.x / size.width.coerceAtLeast(1)).coerceIn(0f, 1f),
+    y = (point.y / size.height.coerceAtLeast(1)).coerceIn(0f, 1f)
+)
+
+private fun wordsInSelection(
+    layout: com.pablo.paper.desktop.model.PageTextLayout?,
+    start: Offset,
+    end: Offset,
+    pageWidth: Float,
+    pageHeight: Float
+): List<com.pablo.paper.desktop.model.TextWord> {
+    val selection = Rect(
+        left = min(start.x, end.x),
+        top = min(start.y, end.y),
+        right = max(start.x, end.x),
+        bottom = max(start.y, end.y)
+    )
+    return layout?.words.orEmpty().filter { word ->
+        selection.overlaps(
+            Rect(
+                left = word.x * pageWidth,
+                top = word.y * pageHeight,
+                right = (word.x + word.width) * pageWidth,
+                bottom = (word.y + word.height) * pageHeight
+            )
+        )
+    }
+}
+
+@Composable
+private fun SelectionActions(tab: TabDocumentState, workspaceState: WorkspaceState, modifier: Modifier) {
+    val selection = tab.selectedTextRange ?: return
+    if (selection.selectedText.isBlank()) return
+
+    Row(
+        modifier = modifier
+            .clip(RoundedCornerShape(8.dp))
+            .background(MaterialTheme.colorScheme.surface)
+            .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.45f), RoundedCornerShape(8.dp))
+            .shadow(10.dp, RoundedCornerShape(8.dp))
+            .padding(horizontal = 5.dp, vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(2.dp)
+    ) {
+        IconButton(
+            onClick = {
+                Toolkit.getDefaultToolkit().systemClipboard.setContents(StringSelection(selection.selectedText), null)
+                tab.clearSelection()
+            },
+            modifier = Modifier.size(36.dp)
+        ) {
+            Icon(Icons.Default.ContentCopy, contentDescription = "Copiar selección", modifier = Modifier.size(17.dp))
+        }
+        IconButton(
+            onClick = {
+                tab.addAnnotation(
+                    Annotation(
+                        id = java.util.UUID.randomUUID().toString(),
+                        pageIndex = selection.pageIndex,
+                        type = AnnotationType.HIGHLIGHT,
+                        rects = selection.selectedWords.map { it.bounds },
+                        color = 0xFFD3A631L
+                    )
+                )
+                tab.clearSelection()
+            },
+            modifier = Modifier.size(36.dp)
+        ) {
+            Icon(Icons.Default.Highlight, contentDescription = "Resaltar selección", tint = Color(0xFF9A7212), modifier = Modifier.size(18.dp))
+        }
+        IconButton(
+            onClick = {
+                workspaceState.isRightDockOpen = true
+                workspaceState.rightDockTab = RightDockTab.AI_ASSISTANT
+                workspaceState.sendAiMessage("Explica este fragmento del documento sin inventar contexto:\n\n${selection.selectedText}")
+                tab.clearSelection()
+            },
+            modifier = Modifier.size(36.dp)
+        ) {
+            Icon(Icons.Default.AutoAwesome, contentDescription = "Preguntar a la IA sobre la selección", tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(17.dp))
         }
     }
 }
 
 @Composable
-fun FloatingPdfHud(
-    tab: TabDocumentState,
-    modifier: Modifier = Modifier
-) {
-    var showZoomMenu by remember { mutableStateOf(false) }
-
-    Box(
+private fun ReaderControls(tab: TabDocumentState, modifier: Modifier) {
+    Row(
         modifier = modifier
-            .clip(RoundedCornerShape(24.dp))
-            .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.94f))
-            .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.4f), RoundedCornerShape(24.dp))
-            .shadow(16.dp, RoundedCornerShape(24.dp))
-            .padding(horizontal = 10.dp, vertical = 4.dp)
+            .clip(RoundedCornerShape(8.dp))
+            .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.96f))
+            .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.45f), RoundedCornerShape(8.dp))
+            .shadow(8.dp, RoundedCornerShape(8.dp))
+            .padding(horizontal = 5.dp, vertical = 3.dp),
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(4.dp)
-        ) {
-            // Page Backward
-            IconButton(
-                onClick = { if (tab.currentPage > 0) tab.currentPage-- },
-                enabled = tab.currentPage > 0,
-                modifier = Modifier.size(28.dp)
-            ) {
-                Icon(Icons.Default.ChevronLeft, contentDescription = "Página anterior", modifier = Modifier.size(18.dp))
-            }
+        IconButton(
+            onClick = { if (tab.currentPage > 0) tab.currentPage-- },
+            enabled = tab.currentPage > 0,
+            modifier = Modifier.size(36.dp)
+        ) { Icon(Icons.Default.ChevronLeft, contentDescription = "Página anterior", modifier = Modifier.size(18.dp)) }
+        Text(
+            text = "${tab.currentPage + 1} / ${tab.pageCount}",
+            fontSize = 12.sp,
+            fontWeight = FontWeight.SemiBold,
+            color = MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.padding(horizontal = 6.dp)
+        )
+        IconButton(
+            onClick = { if (tab.currentPage < tab.pageCount - 1) tab.currentPage++ },
+            enabled = tab.currentPage < tab.pageCount - 1,
+            modifier = Modifier.size(36.dp)
+        ) { Icon(Icons.Default.ChevronRight, contentDescription = "Página siguiente", modifier = Modifier.size(18.dp)) }
+        Spacer(Modifier.width(4.dp))
+        IconButton(
+            onClick = { tab.zoomScale = (tab.zoomScale / 1.15f).coerceAtLeast(0.35f) },
+            modifier = Modifier.size(36.dp)
+        ) { Icon(Icons.Default.ZoomOut, contentDescription = "Alejar", modifier = Modifier.size(16.dp)) }
+        Text(
+            text = "${(tab.zoomScale * 100).roundToInt()}%",
+            fontSize = 11.sp,
+            fontWeight = FontWeight.SemiBold,
+            color = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.padding(horizontal = 4.dp)
+        )
+        IconButton(
+            onClick = { tab.zoomScale = (tab.zoomScale * 1.15f).coerceAtMost(4f) },
+            modifier = Modifier.size(36.dp)
+        ) { Icon(Icons.Default.ZoomIn, contentDescription = "Acercar", modifier = Modifier.size(16.dp)) }
+    }
+}
 
-            // Page Number
-            Text(
-                text = "${tab.currentPage + 1} / ${tab.pageCount}",
-                fontSize = 12.sp,
-                fontWeight = FontWeight.SemiBold,
-                color = MaterialTheme.colorScheme.onSurface,
-                modifier = Modifier.padding(horizontal = 4.dp)
-            )
-
-            // Page Forward
-            IconButton(
-                onClick = { if (tab.currentPage < tab.pageCount - 1) tab.currentPage++ },
-                enabled = tab.currentPage < tab.pageCount - 1,
-                modifier = Modifier.size(28.dp)
-            ) {
-                Icon(Icons.Default.ChevronRight, contentDescription = "Página siguiente", modifier = Modifier.size(18.dp))
-            }
-
-            Box(modifier = Modifier.height(18.dp).width(1.dp).background(MaterialTheme.colorScheme.outline.copy(alpha = 0.4f)))
-
-            // Fit to Width
-            IconButton(
-                onClick = { tab.zoomScale = 1.35f; tab.panOffset = Offset.Zero },
-                modifier = Modifier.size(28.dp)
-            ) {
-                Icon(Icons.Default.FitScreen, contentDescription = "Ajustar al ancho", modifier = Modifier.size(15.dp))
-            }
-
-            // Fit to Page
-            IconButton(
-                onClick = { tab.zoomScale = 1.0f; tab.panOffset = Offset.Zero },
-                modifier = Modifier.size(28.dp)
-            ) {
-                Icon(Icons.Default.Description, contentDescription = "Ajustar a página", modifier = Modifier.size(15.dp))
-            }
-
-            Box(modifier = Modifier.height(18.dp).width(1.dp).background(MaterialTheme.colorScheme.outline.copy(alpha = 0.4f)))
-
-            // Zoom Out
-            IconButton(
-                onClick = { tab.zoomScale = (tab.zoomScale / 1.15f).coerceAtLeast(0.25f) },
-                modifier = Modifier.size(28.dp)
-            ) {
-                Icon(Icons.Default.ZoomOut, contentDescription = "Zoom -", modifier = Modifier.size(15.dp))
-            }
-
-            // Zoom Percentage Dropdown
-            Box {
-                Box(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(4.dp))
-                        .clickable { showZoomMenu = true }
-                        .padding(horizontal = 6.dp, vertical = 3.dp)
-                ) {
-                    Text(
-                        text = "${(tab.zoomScale * 100).roundToInt()}%",
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.primary
-                    )
-                }
-
-                DropdownMenu(expanded = showZoomMenu, onDismissRequest = { showZoomMenu = false }) {
-                    val presets = listOf(0.5f, 0.75f, 1.0f, 1.25f, 1.5f, 2.0f, 3.0f, 4.0f)
-                    presets.forEach { scale ->
-                        DropdownMenuItem(
-                            text = { Text("${(scale * 100).toInt()}%", fontSize = 12.sp) },
-                            onClick = {
-                                tab.zoomScale = scale
-                                showZoomMenu = false
-                            }
-                        )
-                    }
-                }
-            }
-
-            // Zoom In
-            IconButton(
-                onClick = { tab.zoomScale = (tab.zoomScale * 1.15f).coerceAtMost(6.0f) },
-                modifier = Modifier.size(28.dp)
-            ) {
-                Icon(Icons.Default.ZoomIn, contentDescription = "Zoom +", modifier = Modifier.size(15.dp))
-            }
-        }
+private fun openPdfPicker(state: WorkspaceState) {
+    javax.swing.SwingUtilities.invokeLater {
+        val picker = java.awt.FileDialog(null as java.awt.Frame?, "Abrir PDF", java.awt.FileDialog.LOAD)
+        picker.setFilenameFilter { _, name -> name.endsWith(".pdf", ignoreCase = true) }
+        picker.isVisible = true
+        if (picker.file != null) state.openDocument(java.io.File(picker.directory, picker.file))
     }
 }

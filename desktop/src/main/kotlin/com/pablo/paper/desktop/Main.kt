@@ -29,8 +29,12 @@ fun main(args: Array<String>) = application {
         }
     }
 
+    val closeApplication = {
+        workspaceState.saveAllSessions(::exitApplication)
+    }
+
     Window(
-        onCloseRequest = ::exitApplication,
+        onCloseRequest = closeApplication,
         state = windowState,
         undecorated = true,
         title = if (workspaceState.activeTab != null) {
@@ -42,7 +46,7 @@ fun main(args: Array<String>) = application {
         DesktopWindowContent(
             state = workspaceState,
             windowState = windowState,
-            onCloseWindow = ::exitApplication
+            onCloseWindow = closeApplication
         )
     }
 }

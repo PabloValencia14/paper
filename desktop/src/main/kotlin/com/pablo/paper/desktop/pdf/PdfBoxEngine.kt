@@ -40,6 +40,7 @@ class PdfBoxEngine(
     private var docIdentifier: String = ""
     private var openedFile: File? = null
     private val mutex = Mutex()
+    private val documentLock = Any()
     private val scope = CoroutineScope(Dispatchers.IO + Job())
     private var prefetchJob: Job? = null
 
@@ -52,6 +53,7 @@ class PdfBoxEngine(
         mutex.withLock {
             try {
                 if (!file.exists() || !file.canRead()) return@withContext false
+                cache.clear()
                 docIdentifier = file.absolutePath.hashCode().toString()
                 openedFile = file
 
@@ -138,7 +140,6 @@ class PdfBoxEngine(
                 cache.put(cacheKey, finalImg)
             } catch (oom: OutOfMemoryError) {
                 cache.clear()
-                System.gc()
                 null
             } catch (e: Exception) {
                 e.printStackTrace()
@@ -183,23 +184,26 @@ class PdfBoxEngine(
     }
 
     override fun extractText(pageIndex: Int): String {
-        val doc = document ?: return ""
-        if (pageIndex < 0 || pageIndex >= doc.numberOfPages) return ""
-        return try {
-            val stripper = PDFTextStripper()
-            stripper.startPage = pageIndex + 1
-            stripper.endPage = pageIndex + 1
-            stripper.getText(doc).trim()
-        } catch (e: Exception) {
-            ""
+        synchronized(documentLock) {
+            val doc = document ?: return ""
+            if (pageIndex < 0 || pageIndex >= doc.numberOfPages) return ""
+            return try {
+                val stripper = PDFTextStripper()
+                stripper.startPage = pageIndex + 1
+                stripper.endPage = pageIndex + 1
+                stripper.getText(doc).trim()
+            } catch (_: Exception) {
+                ""
+            }
         }
     }
 
     override fun extractPageTextLayout(pageIndex: Int): com.pablo.paper.desktop.model.PageTextLayout {
-        val doc = document ?: return com.pablo.paper.desktop.model.PageTextLayout(pageIndex)
-        if (pageIndex < 0 || pageIndex >= doc.numberOfPages) return com.pablo.paper.desktop.model.PageTextLayout(pageIndex)
+        synchronized(documentLock) {
+            val doc = document ?: return com.pablo.paper.desktop.model.PageTextLayout(pageIndex)
+            if (pageIndex < 0 || pageIndex >= doc.numberOfPages) return com.pablo.paper.desktop.model.PageTextLayout(pageIndex)
 
-        return try {
+            return try {
             val page = doc.getPage(pageIndex)
             val cropBox = page.cropBox ?: page.mediaBox
             val pw = cropBox.width
@@ -277,20 +281,21 @@ class PdfBoxEngine(
                 words = wordList,
                 fullText = fullText
             )
-        } catch (e: Exception) {
-            e.printStackTrace()
-            com.pablo.paper.desktop.model.PageTextLayout(pageIndex)
+            } catch (_: Exception) {
+                com.pablo.paper.desktop.model.PageTextLayout(pageIndex)
+            }
         }
     }
 
 
     override fun extractAllText(): String {
-        val doc = document ?: return ""
-        return try {
-            val stripper = PDFTextStripper()
-            stripper.getText(doc).trim()
-        } catch (e: Exception) {
-            ""
+        synchronized(documentLock) {
+            val doc = document ?: return ""
+            return try {
+                PDFTextStripper().getText(doc).trim()
+            } catch (_: Exception) {
+                ""
+            }
         }
     }
 
@@ -460,11 +465,15 @@ class PdfBoxEngine(
 
     override fun close() {
         prefetchJob?.cancel()
-        try {
-            document?.close()
-        } catch (e: Exception) {}
-        document = null
-        renderer = null
-        openedFile = null
+        synchronized(documentLock) {
+            try {
+                document?.close()
+            } catch (_: Exception) {}
+            document = null
+            renderer = null
+            openedFile = null
+            docIdentifier = ""
+            cache.clear()
+        }
     }
 }

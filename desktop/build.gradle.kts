@@ -22,20 +22,16 @@ dependencies {
     // JSON serialization
     implementation("com.google.code.gson:gson:2.10.1")
     
-    // JavaFX for WebView PDF.js integration
-    implementation("org.openjfx:javafx-base:17.0.8:win")
-    implementation("org.openjfx:javafx-graphics:17.0.8:win")
-    implementation("org.openjfx:javafx-controls:17.0.8:win")
-    implementation("org.openjfx:javafx-web:17.0.8:win")
-    implementation("org.openjfx:javafx-swing:17.0.8:win")
-    
-    // High-performance PDF Rendering, AcroForms, OCR, Watermarks, Bates & Manipulation Engine
+    // Native renderer and PDF manipulation engine.
     implementation("org.apache.pdfbox:pdfbox:3.0.2")
     implementation("org.apache.pdfbox:fontbox:3.0.2")
-    
-    // Digital Signatures, PKCS#12, AES Cryptography & Permissions
-    implementation("org.bouncycastle:bcprov-jdk18on:1.78.1")
-    implementation("org.bouncycastle:bcpkix-jdk18on:1.78.1")
+
+    testImplementation("io.kotest:kotest-runner-junit5:5.9.1")
+    testImplementation("io.kotest:kotest-assertions-core:5.9.1")
+}
+
+tasks.withType<org.gradle.api.tasks.testing.Test>().configureEach {
+    useJUnitPlatform()
 }
 
 compose.desktop {
