@@ -266,6 +266,14 @@ void PaperWorkspace::loadSession()
     m_notesEdit->blockSignals(false);
 
     if (m_document && m_document->pages() > 0) {
+        const QJsonValue rotationValue = root.value(QStringLiteral("rotation"));
+        if (rotationValue.isDouble()) {
+            const int rotationDegrees = rotationValue.toInt();
+            if (rotationDegrees % 90 == 0) {
+                const int normalizedRotation = ((rotationDegrees / 90) % 4 + 4) % 4;
+                m_document->setRotation(normalizedRotation);
+            }
+        }
         const QString viewportString = root.value(QStringLiteral("viewport")).toString();
         Okular::DocumentViewport viewport(viewportString);
         if (!viewport.isValid()) {
@@ -296,6 +304,7 @@ bool PaperWorkspace::saveSession()
     root.insert(QStringLiteral("version"), 1);
     root.insert(QStringLiteral("currentPage"), m_document ? static_cast<int>(m_document->currentPage()) : 0);
     root.insert(QStringLiteral("viewport"), m_document ? m_document->viewport().toString() : QString());
+    root.insert(QStringLiteral("rotation"), m_document ? static_cast<int>(m_document->rotation()) * 90 : 0);
     root.insert(QStringLiteral("notes"), m_notesEdit->toPlainText());
     root.insert(QStringLiteral("updatedAt"), QDateTime::currentDateTimeUtc().toString(Qt::ISODate));
 

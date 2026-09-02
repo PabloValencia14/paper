@@ -5,8 +5,8 @@ alterar el motor de documentos ni modificar el PDF original.
 
 ## Qué aporta
 
-- **Sesión por documento**: al cerrar un PDF se guarda su página y viewport en
-  `<nombre>.paper.json`, junto a las notas Markdown.
+- **Sesión por documento**: al cerrar un PDF se guarda su página, viewport y
+  rotación en `<nombre>.paper.json`, junto a las notas Markdown.
 - **Compatibilidad con Paper**: al guardar se conservan también los campos que
   Paper ya tuviera en ese sidecar (por ejemplo, anotaciones, zoom o modo de
   lectura), aunque Okular no los edite todavía.
