@@ -35,5 +35,6 @@ KDE Craft o una instalación equivalente.
 
 La app Android de Paper no se modifica con esta rama. Las funciones específicas
 de lápiz de Android (rechazo de palma, presión, borrado de objetos y
-reconocimiento de formas) siguen perteneciendo a esa app; portarlas a las
-anotaciones persistentes de Okular requiere una fase independiente.
+reconocimiento de formas), además del modo de lectura biónica y la extracción
+OCR, siguen perteneciendo a esa app; portarlas a las anotaciones persistentes
+y a los distintos backends de Okular requiere una fase independiente.
